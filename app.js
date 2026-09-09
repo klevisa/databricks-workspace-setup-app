@@ -40,21 +40,21 @@
      step: when it appears in the deployment (ORDER) or "run" (only in tabs 2/3). */
   var nodes = [
     { id: "admin", step: "0", x: 40, y: 150, w: 230, h: 110, title: "Admin / Analyst",
-      lines: ["Browser · REST / CLI", "reaches the VPC via corp VPN /", "private route — no public front door"] },
+      lines: ["Browser / REST API / CLI", "private route — no public front door"] },
 
     // Databricks-owned side
     { id: "wssa", step: "2.4", x: 1265, y: 180, w: 350, h: 95, title: "Workspace SA", accent: true,
       lines: ["db-<id>@prod-gcp-<region> · control-plane-owned", "the launcher — creates VMs across the boundary"],
       identity: "IDENTITY · the launcher — never the VMs' runtime identity" },
     { id: "plproxy", step: "0", x: 1265, y: 290, w: 350, h: 85, title: "PSC service attachment — plproxy",
-      lines: ["frontend: workspace UI / REST (users + clusters)", "…/plproxy-psc-endpoint-all-ports"] },
+      lines: ["Workspace UI / API (users + clusters)"] },
     { id: "ngrok", step: "0", x: 1265, y: 390, w: 350, h: 85, title: "PSC service attachment — ngrok",
-      lines: ["backend: secure cluster connectivity relay", "…/ngrok-psc-endpoint"] },
+      lines: ["backend: secure cluster connectivity relay (SCC)"] },
     { id: "controlplane", step: "0", x: 1265, y: 490, w: 350, h: 175, title: "Regional control plane",
-      lines: ["workspace app · cluster manager (acts as the", "Workspace SA) · job scheduler · UC metastore —", "metadata only; issues down-scoped tokens;", "data never transits here", "notebook state / query text: CMEK (MANAGED)"],
+      lines: ["Workspace UI / API", "Cluster Manager (acts as Workspace SA)", "Job Scheduler, etc."],
       identity: "IDENTITY · Databricks-managed; reached only via PSC" },
     { id: "accountapi", step: "0", x: 1265, y: 680, w: 350, h: 140, title: "Account API",
-      lines: ["accounts.gcp.databricks.com · provisioning ·", "registers CMEK · PSC endpoints · PAS", "SCIM / IdP sync (Okta → Account API)"],
+      lines: ["accounts.gcp.databricks.com", "Workspace provisioning", "IdP sync (Okta → Account API)"],
       identity: "IDENTITY · account admin (Google OIDC tokens)" },
 
     // Host project — network (2.2)
@@ -93,17 +93,17 @@
 
     // Mail data projects (existing context)
     { id: "datalake", step: "0", x: 790, y: 705, w: 370, h: 82, title: "GCS — data-lake bucket(s) · read-only",
-      lines: ["Yahoo Mail data · objectViewer + legacyBucketReader"],
+      lines: ["Yahoo Mail data", "grant: objectViewer + legacyBucketReader"],
       identity: "IDENTITY · vended UC storage-credential SA (RO)" },
     { id: "analytics", step: "0", x: 790, y: 797, w: 370, h: 82, title: "GCS — analytics bucket (PoC) · read-write",
-      lines: ["benchmark outputs · managed tables"],
+      lines: ["benchmark outputs"],
       identity: "IDENTITY · vended UC storage-credential SA (RW)" },
     { id: "bigquery", step: "0", x: 790, y: 889, w: 370, h: 60, title: "BigQuery",
-      lines: ["Yahoo Mail datasets · billing export + authorized view"] },
+      lines: ["Yahoo Mail datasets"] },
 
     // Public internet
     { id: "pkgrepos", step: "0", x: 1265, y: 905, w: 350, h: 70, title: "Package repos — PyPI · Maven · npm",
-      lines: ["reachable only via Cloud NAT (outbound) · no inbound"] }
+      lines: ["Reachable via Cloud NAT", "Optional if using local repos"] }
   ];
 
   /* ---------------- persistent deployment "grant" edges ---------------- */
