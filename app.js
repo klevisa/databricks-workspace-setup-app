@@ -40,83 +40,171 @@
      step: when it appears in the deployment (ORDER) or "run" (only in tabs 2/3). */
   var nodes = [
     { id: "admin", step: "0", x: 40, y: 150, w: 230, h: 110, title: "Admin / Analyst",
-      lines: ["Browser / REST API / CLI", "private route — no public front door"] },
+      lines: ["Users — private access only"],
+      detail: {
+        what: "Yahoo admins and analysts. They reach the workspace over a private route only — there is no public front door.",
+        conn: ["Browser / REST API / CLI → frontend PSC endpoint · TLS 443", "Auth: Okta session / PAT (OIDC on a back-channel)"] } },
 
     // Databricks-owned side
     { id: "wssa", step: "2.4", x: 1265, y: 180, w: 350, h: 95, title: "Workspace SA", accent: true,
-      lines: ["db-<id>@prod-gcp-<region> · control-plane-owned", "the launcher — creates VMs across the boundary"],
-      identity: "IDENTITY · the launcher — never the VMs' runtime identity" },
-    { id: "plproxy", step: "0", x: 1265, y: 290, w: 350, h: 85, title: "PSC service attachment — plproxy",
-      lines: ["Workspace UI / API (users + clusters)"] },
-    { id: "ngrok", step: "0", x: 1265, y: 390, w: 350, h: 85, title: "PSC service attachment — ngrok",
-      lines: ["backend: secure cluster connectivity relay (SCC)"] },
+      lines: ["The launcher (control-plane-owned)"],
+      identity: "IDENTITY · the launcher — never the VMs' runtime identity",
+      detail: {
+        what: "Databricks-owned service account, minted when the workspace is created (2.4). The control plane acts AS this SA to build and run the workspace — it launches cluster VMs and creates the workspace storage. It is never what the VMs run as.",
+        extra: [
+          { label: "Project role · granted 2.5 (read + actAs)", body: "16 perms — incl. <code>iam.serviceAccounts.actAs</code>, <code>compute.instances.list</code>." },
+          { label: "Resource role · granted 2.5 (create · IAM-scoped)", body: "35 perms, scoped by IAM condition to this workspace's resources — incl. <code>storage.buckets.create</code>, <code>compute.instances.create</code>, <code>compute.disks.create</code>." },
+          { label: "Network role · granted 2.6 (host node subnet)", body: "<code>compute.subnetworks.get</code>, <code>compute.subnetworks.use</code>." },
+          { label: "CMEK · granted 2.7 (MANAGED_SERVICES)", body: "<code>cloudkms.cryptoKeyEncrypterDecrypter</code> on the CMEK key." } ],
+        conn: ["Reached only via PSC — no public path"] } },
+    { id: "plproxy", step: "0", x: 1265, y: 290, w: 350, h: 85, title: "PSC attachment — plproxy",
+      lines: ["Frontend: Workspace UI / API"],
+      detail: {
+        what: "Databricks-side Private Service Connect producer for front-end traffic. The workspace's frontend PSC endpoint connects to it.",
+        conn: ["Carries Workspace UI / API (users + clusters) · TLS 443"] } },
+    { id: "ngrok", step: "0", x: 1265, y: 390, w: 350, h: 85, title: "PSC attachment — ngrok",
+      lines: ["Backend: SCC relay"],
+      detail: {
+        what: "Databricks-side PSC producer for the secure cluster connectivity (SCC) relay — how clusters dial home with no inbound path.",
+        conn: ["Carries SCC relay · TCP 6666 · always cluster-initiated"] } },
     { id: "controlplane", step: "0", x: 1265, y: 490, w: 350, h: 175, title: "Regional control plane",
-      lines: ["Workspace UI / API", "Cluster Manager (acts as Workspace SA)", "Job Scheduler, etc."],
-      identity: "IDENTITY · Databricks-managed; reached only via PSC" },
+      lines: ["Workspace UI/API · Cluster Manager · Jobs"],
+      identity: "IDENTITY · Databricks-managed; reached only via PSC",
+      detail: {
+        what: "The Databricks-managed regional services for this workspace: Workspace UI/API, the Cluster Manager that launches compute (acting as the Workspace SA), the Job Scheduler, and more.",
+        conn: ["Reached only via the frontend PSC endpoint — no public ingress", "Control-plane data (notebooks, results, secrets) is CMEK-encrypted (2.7)"] } },
     { id: "accountapi", step: "0", x: 1265, y: 680, w: 350, h: 140, title: "Account API",
-      lines: ["accounts.gcp.databricks.com", "Workspace provisioning", "IdP sync (Okta → Account API)"],
-      identity: "IDENTITY · account admin (Google OIDC tokens)" },
+      lines: ["Provisioning + IdP sync"],
+      identity: "IDENTITY · account admin (Google OIDC tokens)",
+      detail: {
+        what: "The account-level control plane at accounts.gcp.databricks.com. It provisions workspaces and syncs identities.",
+        conn: ["Workspace provisioning (creates the workspace in 2.4)", "IdP sync: Okta → Account API", "Auth: account admin via Google OIDC tokens"] } },
 
     // Host project — network (2.2)
     { id: "dnszone", step: "2.2", x: 350, y: 235, w: 250, h: 155, title: "Private DNS zone",
-      lines: ["gcp.databricks.com", "resolves workspace hostnames to", "the private PSC endpoint IPs"], pill: "dns" },
+      lines: ["Resolves hostnames → private PSC IPs"], pill: "dns",
+      detail: {
+        what: "A private Cloud DNS zone for gcp.databricks.com that maps the workspace hostnames to the reserved private IPs of the PSC endpoints, so resolution stays inside the VPC.",
+        owner: "network",
+        conn: ["Zone created in 2.2 (no records yet)", "4 A-records written in 2.6"],
+        repo: "network/ · post-workspace/" } },
     { id: "routernat", step: "2.2", x: 620, y: 235, w: 230, h: 110, title: "Cloud Router + NAT",
-      optional: true, lines: ["outbound only · for public package", "installs · removable with mirrors"] },
+      optional: true, lines: ["Outbound only — package installs"],
+      detail: {
+        what: "Optional egress path for public package installs (PyPI/Maven/npm). Outbound only. Removable if you mirror packages internally.",
+        owner: "network", repo: "network/" } },
 
     // The host-project half of the creator grant (a separate per-project custom role),
     // held by the same workspace-creator SA that lives in the service project.
-    { id: "crole_host", step: "2.2", x: 888, y: 526, w: 260, h: 74, title: "Workspace-creator role · host (RO)",
-      lines: ["RO: forwardingRules.get/list · networks/subnetworks.get,", "projects/roles/services.get/list (+getIamPolicy)"],
-      identity: "IDENTITY · held by the workspace-creator SA" },
+    { id: "crole_host", step: "2.2", x: 888, y: 526, w: 260, h: 74, title: "Creator role · host",
+      lines: ["Read-only settings validation"],
+      identity: "IDENTITY · held by the workspace-creator SA",
+      detail: {
+        what: "Read-only custom role on the HOST project. It lets the workspace-creator SA validate host-network settings during workspace creation — it grants no create/modify power.",
+        owner: "network",
+        role: "lpw.databricks.workspace.creator.host.v2",
+        perms: ["compute.forwardingRules.get", "compute.forwardingRules.list", "compute.networks.get", "compute.projects.get", "compute.subnetworks.get", "compute.subnetworks.getIamPolicy", "iam.roles.get", "resourcemanager.projects.get", "resourcemanager.projects.getIamPolicy", "serviceusage.services.get", "serviceusage.services.list"],
+        repo: "network/creator-roles.tf" } },
     { id: "frontendpsc", step: "2.2", x: 905, y: 258, w: 240, h: 95, title: "Frontend PSC endpoint",
-      lines: ["forwarding rule → reserved private IP", "carries Workspace UI / API · TLS 443"], pill: "psc" },
+      lines: ["Workspace UI / API"], pill: "psc",
+      detail: {
+        what: "The consumer PSC endpoint for front-end traffic: a forwarding rule to a reserved private IP that connects to the plproxy attachment.",
+        owner: "network",
+        conn: ["Carries Workspace UI / API · TLS 443", "PENDING at 2.2 → ACCEPTED at 2.4"],
+        repo: "network/" } },
     { id: "backendpsc", step: "2.2", x: 905, y: 365, w: 240, h: 80, title: "Backend PSC endpoint",
-      lines: ["forwarding rule → reserved private IP", "carries SCC relay · TCP 6666"], pill: "psc" },
+      lines: ["SCC relay"], pill: "psc",
+      detail: {
+        what: "The consumer PSC endpoint for the secure cluster connectivity relay: a forwarding rule to a reserved private IP that connects to the ngrok attachment.",
+        owner: "network",
+        conn: ["Carries SCC relay · TCP 6666", "PENDING at 2.2 → ACCEPTED at 2.4"],
+        repo: "network/" } },
     { id: "firewall", step: "2.2", x: 366, y: 576, w: 0, h: 0, textOnly: true,
       lines: [
-        "Firewall — cluster egress allowed to the PSC subnet only:",
-        "443 = Workspace UI / API · 6666 = SCC relay · 8443–8451 = internal control",
-        "intra-subnet traffic allowed · no inbound from the internet"
+        "Firewall — cluster egress allowed to the PSC subnet only",
+        "no inbound from the internet · intra-subnet traffic allowed"
       ] },
 
     // Node subnet — runtime VMs (tabs 2/3)
     { id: "drivervm", step: "run", x: 370, y: 452, w: 220, h: 112, title: "Driver VM",
-      lines: ["Databricks Runtime", "Photon — C++ vectorized engine"],
-      identity: "IDENTITY · runs as Compute SA / Cluster SA" },
+      lines: ["Runtime + Photon"],
+      identity: "IDENTITY · runs as Compute SA / Cluster SA",
+      detail: {
+        what: "The cluster driver in the private node subnet. Runs the Databricks Runtime and the Photon vectorized engine on CMEK-encrypted disks.",
+        conn: ["Runs as the Compute SA (or a custom Cluster SA) — not the Workspace SA"] } },
     { id: "execvm", step: "run", x: 610, y: 452, w: 220, h: 112, title: "Executor VMs × N",
-      lines: ["Spark executors (autoscaling)", "Photon — C++ vectorized engine"],
-      identity: "IDENTITY · runs as Compute SA / Cluster SA" },
+      lines: ["Spark executors (autoscaling)"],
+      identity: "IDENTITY · runs as Compute SA / Cluster SA",
+      detail: {
+        what: "Autoscaling Spark executors running Photon on CMEK-encrypted disks in the node subnet. They do the actual data scan.",
+        conn: ["Run as the Compute SA (or a custom Cluster SA)", "Read Mail data as the vended UC storage-credential SA — never their own SA"] } },
 
     // Service project
     // The workspace-creator SA lives in the service project (bhavink convention). It is
     // granted TWO read-only per-project custom roles — this service role, plus the host
     // role (separate box in the host project). Those two roles are its read access.
-    { id: "creatorsa", step: "2.1", x: 350, y: 700, w: 370, h: 54, title: "Workspace-creator SA · lives here", accent: true,
-      lines: ["databricks_account_admin_sa · Databricks account admin · used in 2.4"],
-      identity: "IDENTITY · holds the service + host read-only roles ↓" },
-    { id: "crole_svc", step: "2.1", x: 350, y: 760, w: 370, h: 76, title: "Workspace-creator role · service (RO)",
-      lines: ["projects.get/getIamPolicy · serviceAccounts.get/getIamPolicy", "roles.get · cryptoKeys.getIamPolicy · services.get/list"],
-      identity: "IDENTITY · held by the workspace-creator SA (above)" },
-    { id: "computesa", step: "2.8", x: 350, y: 842, w: 370, h: 74, title: "Compute SA (+ optional Cluster SA)",
-      lines: ["databricks-compute@<svc-project> — GCE default", "the driver / executor VMs' runtime identity"],
-      identity: "IDENTITY · not the launcher · minimal perms" },
+    { id: "creatorsa", step: "2.1", x: 350, y: 700, w: 370, h: 54, title: "Workspace-creator SA", accent: true,
+      lines: ["Impersonated to create the workspace (2.4)"],
+      identity: "IDENTITY · holds the two read-only creator roles",
+      detail: {
+        what: "The identity that creates the workspace. It is registered as a Databricks account admin and impersonated in phase 1 (2.4). It holds only the two read-only creator roles below — it cannot create or modify GCP resources. It lives in the service project.",
+        owner: "foundation",
+        extra: [ { label: "Roles held", body: "Creator role · service (2.1) + Creator role · host (2.2). Both read-only." } ],
+        conn: ["SA: <code>databricks_account_admin_sa</code>", "Not the Workspace SA (that is minted in 2.4)"] } },
+    { id: "crole_svc", step: "2.1", x: 350, y: 760, w: 370, h: 76, title: "Creator role · service",
+      lines: ["Read-only settings validation"],
+      identity: "IDENTITY · held by the workspace-creator SA",
+      detail: {
+        what: "Read-only custom role on the SERVICE project. It lets the workspace-creator SA validate service-project settings during workspace creation — no create/modify power.",
+        owner: "foundation",
+        role: "lpw.databricks.workspace.creator.service.v2",
+        perms: ["cloudkms.cryptoKeys.getIamPolicy", "compute.projects.get", "iam.roles.get", "iam.serviceAccounts.get", "iam.serviceAccounts.getIamPolicy", "resourcemanager.projects.get", "resourcemanager.projects.getIamPolicy", "serviceusage.services.get", "serviceusage.services.list"],
+        repo: "service-project/creator-roles.tf" } },
+    { id: "computesa", step: "2.8", x: 350, y: 842, w: 370, h: 74, title: "Compute SA",
+      lines: ["The VMs' runtime identity"],
+      identity: "IDENTITY · not the launcher · minimal perms",
+      detail: {
+        what: "The runtime identity the cluster VMs actually run as — minimal permissions, not the launcher. An optional custom Cluster SA can override it per cluster.",
+        owner: "data",
+        conn: ["Default: <code>databricks-compute@&lt;svc-project&gt;</code> (GCE default SA)", "Created in phase 2 (2.8)"] } },
     { id: "kms", step: "2.3", x: 350, y: 922, w: 370, h: 52, title: "Cloud KMS — CMEK key",
-      lines: ["customer keyring + key · STORAGE + MANAGED_SERVICES"],
-      identity: "IDENTITY · Google agents + Workspace SA (2.7)" },
-    { id: "wsbuckets", step: "2.8", x: 350, y: 980, w: 370, h: 52, title: "Workspace GCS buckets + GCE disks",
-      lines: ["workspace system data + DBFS root · CMEK-encrypted"] },
+      lines: ["Customer-managed encryption key"],
+      identity: "IDENTITY · Google agents + Workspace SA (2.7)",
+      detail: {
+        what: "The customer keyring + key that encrypts the workspace. Two use cases: STORAGE (buckets/disks) and MANAGED_SERVICES (control-plane data).",
+        owner: "security",
+        extra: [
+          { label: "STORAGE · granted 2.3", body: "encrypt/decrypt to the service project's Google compute-system + gs-project-accounts agents." },
+          { label: "MANAGED_SERVICES · granted 2.7", body: "<code>cryptoKeyEncrypterDecrypter</code> to the Workspace SA." } ],
+        repo: "cmek/ · cmek-workspace-grant/" } },
+    { id: "wsbuckets", step: "2.8", x: 350, y: 980, w: 370, h: 52, title: "Workspace storage",
+      lines: ["System data + DBFS root (CMEK)"],
+      detail: {
+        what: "The workspace's own GCS buckets and GCE disks — system data and the DBFS root — created by the Workspace SA at finalize (2.8). All CMEK-encrypted (STORAGE).",
+        owner: "data" } },
 
     // Mail data projects (existing context)
-    { id: "datalake", step: "0", x: 790, y: 705, w: 370, h: 82, title: "GCS — data-lake bucket(s) · read-only",
-      lines: ["Yahoo Mail data"] },
-    { id: "analytics", step: "0", x: 790, y: 797, w: 370, h: 82, title: "GCS — analytics bucket (PoC) · read-write",
-      lines: ["benchmark outputs"] },
+    { id: "datalake", step: "0", x: 790, y: 705, w: 370, h: 82, title: "GCS — data lake (read-only)",
+      lines: ["Yahoo Mail data"],
+      detail: {
+        what: "Existing Yahoo Mail data. The workspace reads it read-only, governed by Unity Catalog and the VPC-SC ingress gate.",
+        conn: ["Read as the vended UC storage-credential SA (objectViewer + legacyBucketReader)"] } },
+    { id: "analytics", step: "0", x: 790, y: 797, w: 370, h: 82, title: "GCS — analytics (read-write)",
+      lines: ["Benchmark outputs"],
+      detail: {
+        what: "A PoC bucket the workspace writes benchmark outputs to, read-write, governed by Unity Catalog.",
+        conn: ["Written as the vended UC storage-credential SA"] } },
     { id: "bigquery", step: "0", x: 790, y: 889, w: 370, h: 60, title: "BigQuery",
-      lines: ["Yahoo Mail datasets"] },
+      lines: ["Yahoo Mail datasets"],
+      detail: {
+        what: "Existing Yahoo Mail BigQuery datasets, queried through the governed data path." } },
 
     // Public internet
-    { id: "pkgrepos", step: "0", x: 1265, y: 905, w: 350, h: 70, title: "Package repos — PyPI · Maven · npm",
-      lines: ["Reachable via Cloud NAT", "Optional if using local repos"] }
+    { id: "pkgrepos", step: "0", x: 1265, y: 905, w: 350, h: 70, title: "Package repos",
+      lines: ["PyPI · Maven · npm"],
+      detail: {
+        what: "Public package registries for library installs, reachable outbound via Cloud NAT. Optional if you mirror packages internally.",
+        conn: ["Outbound only, via Cloud Router + NAT"] } }
   ];
 
   /* ---------------- persistent deployment "grant" edges ---------------- */
@@ -630,10 +718,26 @@
     nodes.forEach(function (n) { if (elByNode[n.id]) elByNode[n.id].classList.remove("selected"); });
     var g = elByNode[id]; if (g) g.classList.add("selected");
     var n = nodes.find(function (x) { return x.id === id; }); if (!n) return;
+    var d = n.detail || {};
+    var team = d.owner ? TEAM[d.owner] : null;
     var p = document.getElementById("panelBody");
     var h = '<div class="step-id">Resource</div><h2>' + n.title + '</h2>';
-    h += '<p>' + (n.lines || []).join("<br>") + '</p>';
+    if (team) h += '<span class="chip" style="background:' + team.color + '">' + team.name + '</span>';
+    h += '<p>' + (d.what || (n.lines || []).join("<br>")) + '</p>';
     if (n.identity) h += '<p class="note" style="border-color:#f4c7b3;color:#b3421f">' + n.identity + '</p>';
+    if (d.role) h += '<h3>Custom role</h3><p><code>' + d.role + '</code></p>';
+    if (d.perms && d.perms.length) {
+      h += '<h3>Permissions' + (d.permsLabel || ' · read-only') + '</h3><div>';
+      d.perms.forEach(function (pm) { h += '<span class="tag priv">' + pm + '</span>'; });
+      h += '</div>';
+    }
+    (d.extra || []).forEach(function (s) { h += '<h3>' + s.label + '</h3><p>' + s.body + '</p>'; });
+    if (d.conn && d.conn.length) {
+      h += '<h3>Connectivity &amp; identity</h3><ul>';
+      d.conn.forEach(function (c) { h += '<li>' + c + '</li>'; });
+      h += '</ul>';
+    }
+    if (d.repo) h += '<p class="note">Repo config: <code>' + d.repo + '</code></p>';
     h += '<p class="muted">Appears: ' + (n.step === "run" ? "at cluster launch" : (n.step === "0" ? "already exists" : "step " + n.step)) + '</p>';
     p.innerHTML = h;
   }
