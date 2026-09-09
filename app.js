@@ -689,41 +689,181 @@
   document.getElementById("zoomOut").addEventListener("click", function () { zoomBy(1 / 1.3); });
   document.getElementById("zoomFit").addEventListener("click", fitVB);
 
-  /* ---------- hidden edit mode: ?edit=1 → drag boxes, then window.getLayout() ---------- */
+  /* ---------- hidden edit mode: ?edit=1 → drag / resize boxes + edit text ----------
+     Then window.getLayout() (or the "Copy layout" button) returns, per changed box,
+     the absolute { x, y, w, h, title, lines } (label for containers) to bake back into
+     nodes[]/containers[]. Edges/flows still don't auto-follow — re-route those by hand. */
   var EDIT = /(?:^|[?&])edit(?:=1)?(?:&|$)/.test(location.search);
-  var layoutDelta = {};
+  var edits = {};                       // id -> { x,y,w,h,title,lines,label } (absolute; only changed fields)
+  var nodeById = {}, containerById = {};
+  nodes.forEach(function (n) { nodeById[n.id] = n; });
+  containers.forEach(function (c) { containerById[c.id] = c; });
+
   window.getLayout = function () {
     var o = {};
-    for (var id in layoutDelta) { var d = layoutDelta[id]; if ((d.x || d.y) && BASE[id]) o[id] = { x: BASE[id].x + d.x, y: BASE[id].y + d.y }; }
+    for (var id in edits) {
+      var e = edits[id], keep = {};
+      ["x", "y", "w", "h", "title", "lines", "label"].forEach(function (k) { if (e[k] != null) keep[k] = e[k]; });
+      if (Object.keys(keep).length) o[id] = keep;
+    }
     return o;
   };
+
   if (EDIT) {
     document.body.classList.add("editmode");
+    var layEdit = E("g", { id: "layEdit" }, svg);   // outline + handles, on top of all
+
+    // ---- edit UI: top bar + side panel ----
     var bar = document.createElement("div");
     bar.className = "editbar";
-    bar.innerHTML = 'EDIT MODE · drag any box <button id="copyLayout" type="button">Copy layout</button>';
+    bar.innerHTML = 'EDIT MODE · click a box to select · drag to move · handles to resize · edit text at right ' +
+      '<button id="copyLayout" type="button">Copy layout</button>';
     document.querySelector(".canvas-wrap").appendChild(bar);
+
+    var panel = document.createElement("div");
+    panel.className = "editpanel";
+    panel.hidden = true;
+    panel.innerHTML =
+      '<h4 id="epTitle">—</h4>' +
+      '<textarea id="epText" rows="5" spellcheck="false" placeholder="first line = title · remaining lines = body"></textarea>' +
+      '<div class="dims">' +
+      '<label>W <input id="epW" type="number" step="1"></label>' +
+      '<label>H <input id="epH" type="number" step="1"></label>' +
+      '<button id="epReset" type="button">Reset box</button>' +
+      '</div>';
+    document.querySelector(".canvas-wrap").appendChild(panel);
+
     document.getElementById("copyLayout").addEventListener("click", function () {
       var s = JSON.stringify(window.getLayout(), null, 2);
       try { navigator.clipboard.writeText(s); } catch (e) {}
       window.prompt("Layout (also on clipboard). Paste this back:", s);
     });
-    var dg = null, did = null, dstart = null, dbase = null;
+
+    // ---- helpers ----
+    function base(id) { return nodeById[id] || containerById[id]; }
+    function cur(id) {
+      var b = base(id), e = edits[id] || {};
+      return {
+        x: e.x != null ? e.x : b.x, y: e.y != null ? e.y : b.y,
+        w: e.w != null ? e.w : b.w, h: e.h != null ? e.h : b.h
+      };
+    }
+    // redraw a single box from base + edits, preserving its shown state, then re-handle
+    function reflow(id) {
+      if (nodeById[id]) {
+        var g = elByNode[id], shown = g && g.classList.contains("show");
+        if (g) g.remove();
+        drawNode(Object.assign({}, nodeById[id], edits[id] || {}));
+        if (shown) elByNode[id].classList.add("show");
+      } else {
+        var gc = elByContainer[id], shownc = gc && gc.classList.contains("show");
+        if (gc) gc.remove();
+        drawContainer(Object.assign({}, containerById[id], edits[id] || {}));
+        if (shownc) elByContainer[id].classList.add("show");
+      }
+      if (sel === id) drawHandles(id);
+    }
+
+    // ---- selection + resize handles ----
+    var sel = null, HR = 7;
+    var ROLES = [
+      ["nw", 0, 0, "nwse-resize"], ["n", .5, 0, "ns-resize"], ["ne", 1, 0, "nesw-resize"],
+      ["e", 1, .5, "ew-resize"], ["se", 1, 1, "nwse-resize"], ["s", .5, 1, "ns-resize"],
+      ["sw", 0, 1, "nesw-resize"], ["w", 0, .5, "ew-resize"]
+    ];
+    function drawHandles(id) {
+      while (layEdit.firstChild) layEdit.removeChild(layEdit.firstChild);
+      if (!id) return;
+      var c = cur(id);
+      E("rect", { class: "eoutline", x: c.x, y: c.y, width: c.w, height: c.h, rx: 6 }, layEdit);
+      ROLES.forEach(function (r) {
+        var hx = c.x + r[1] * c.w, hy = c.y + r[2] * c.h;
+        var h = E("rect", { class: "ehandle", x: hx - HR, y: hy - HR, width: 2 * HR, height: 2 * HR, rx: 2, "data-role": r[0] }, layEdit);
+        h.style.cursor = r[3];
+      });
+    }
+    function selectBox(id) {
+      sel = id; drawHandles(id);
+      var b = base(id), e = edits[id] || {}, c = cur(id);
+      panel.hidden = false;
+      document.getElementById("epTitle").textContent = id;
+      var v;
+      if (containerById[id]) v = (e.label != null ? e.label : b.label) || "";
+      else if (b.textOnly) v = (e.lines != null ? e.lines : (b.lines || [])).join("\n");
+      else v = [(e.title != null ? e.title : b.title) || ""].concat(e.lines != null ? e.lines : (b.lines || [])).join("\n");
+      document.getElementById("epText").value = v;
+      document.getElementById("epW").value = Math.round(c.w);
+      document.getElementById("epH").value = Math.round(c.h);
+    }
+    function deselect() { sel = null; drawHandles(null); panel.hidden = true; }
+
+    // ---- panel edits (live) ----
+    document.getElementById("epText").addEventListener("input", function () {
+      if (!sel) return;
+      var b = base(sel), raw = this.value; edits[sel] = edits[sel] || {};
+      if (containerById[sel]) edits[sel].label = raw.replace(/\n/g, " ");
+      else if (b.textOnly) edits[sel].lines = raw.split("\n");
+      else { var ls = raw.split("\n"); edits[sel].title = ls[0]; edits[sel].lines = ls.slice(1); }
+      reflow(sel);
+    });
+    [["w", "epW"], ["h", "epH"]].forEach(function (p) {
+      document.getElementById(p[1]).addEventListener("input", function () {
+        if (!sel) return; var val = parseFloat(this.value); if (isNaN(val)) return;
+        edits[sel] = edits[sel] || {}; edits[sel][p[0]] = Math.max(20, Math.round(val)); reflow(sel);
+      });
+    });
+    document.getElementById("epReset").addEventListener("click", function () {
+      if (!sel) return; delete edits[sel]; reflow(sel); selectBox(sel);
+    });
+
+    // ---- drag: move (box body) or resize (handle) ----
+    var mode = null, dragId = null, startPt = null, startBox = null, role = null;
     svg.addEventListener("mousedown", function (e) {
+      var handle = e.target.closest && e.target.closest(".ehandle");
+      if (handle && sel) {
+        mode = "resize"; dragId = sel; role = handle.getAttribute("data-role");
+        startPt = toSvg(e.clientX, e.clientY); startBox = cur(sel);
+        e.stopPropagation(); e.preventDefault(); return;
+      }
       var g = e.target.closest && e.target.closest("g.node");
-      if (!g) return;
-      did = g.getAttribute("data-id"); if (!did) return;
-      dg = g; dstart = toSvg(e.clientX, e.clientY);
-      var d = layoutDelta[did] || { x: 0, y: 0 }; dbase = { x: d.x, y: d.y };
-      e.stopPropagation(); e.preventDefault();
+      if (g && g.getAttribute("data-id")) {
+        var id = g.getAttribute("data-id");
+        if (id !== sel) selectBox(id);
+        mode = "move"; dragId = id; startPt = toSvg(e.clientX, e.clientY); startBox = cur(id);
+        e.stopPropagation(); e.preventDefault(); return;
+      }
+      deselect();  // empty space → clear selection; let pan proceed (no stopPropagation)
     }, true);
     window.addEventListener("mousemove", function (e) {
-      if (!dg) return;
-      var p = toSvg(e.clientX, e.clientY);
-      layoutDelta[did] = { x: Math.round(dbase.x + (p.x - dstart.x)), y: Math.round(dbase.y + (p.y - dstart.y)) };
-      dg.setAttribute("transform", "translate(" + layoutDelta[did].x + "," + layoutDelta[did].y + ")");
+      if (!mode) return;
+      var p = toSvg(e.clientX, e.clientY), dx = p.x - startPt.x, dy = p.y - startPt.y;
+      edits[dragId] = edits[dragId] || {};
+      if (mode === "move") {
+        edits[dragId].x = Math.round(startBox.x + dx); edits[dragId].y = Math.round(startBox.y + dy);
+      } else {
+        var x = startBox.x, y = startBox.y, w = startBox.w, h = startBox.h;
+        if (role.indexOf("n") > -1) { y = startBox.y + dy; h = startBox.h - dy; }
+        if (role.indexOf("s") > -1) { h = startBox.h + dy; }
+        if (role.indexOf("w") > -1) { x = startBox.x + dx; w = startBox.w - dx; }
+        if (role.indexOf("e") > -1) { w = startBox.w + dx; }
+        if (w < 20) { w = 20; if (role.indexOf("w") > -1) x = startBox.x + startBox.w - 20; }
+        if (h < 20) { h = 20; if (role.indexOf("n") > -1) y = startBox.y + startBox.h - 20; }
+        edits[dragId].x = Math.round(x); edits[dragId].y = Math.round(y);
+        edits[dragId].w = Math.round(w); edits[dragId].h = Math.round(h);
+      }
+      reflow(dragId);
     });
-    window.addEventListener("mouseup", function () { dg = null; did = null; });
+    window.addEventListener("mouseup", function () {
+      if (mode && sel) {
+        var c = cur(sel);
+        document.getElementById("epW").value = Math.round(c.w);
+        document.getElementById("epH").value = Math.round(c.h);
+      }
+      mode = null; dragId = null; role = null;
+    });
+
+    // while editing, suppress the normal node-click → detail-panel selection
+    svg.addEventListener("click", function (e) { e.stopPropagation(); }, true);
   }
 
   setTab("deploy");
