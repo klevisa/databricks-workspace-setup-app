@@ -32,8 +32,8 @@
     { id: "maildata",  step: "0", x: 770, y: 665, w: 410, h: 335, label: "YAHOO MAIL DATA PROJECTS (EXISTING)", cls: "frame" },
     { id: "dbx",       step: "0", x: 1240, y: 140, w: 400, h: 700, label: "DATABRICKS-OWNED GCP PROJECTS — OUTSIDE THE PERIMETER", cls: "frame" },
     { id: "internet",  step: "0", x: 1240, y: 870, w: 400, h: 120, label: "PUBLIC INTERNET", cls: "frame" },
-    { id: "pscsubnet", step: "2.2", x: 890, y: 225, w: 270, h: 265, label: "PSC SUBNET 10.10.1.0/28", cls: "subframe" },
-    { id: "nodesubnet",step: "2.2", x: 350, y: 420, w: 510, h: 185, label: "NODE SUBNET 10.10.0.0/24 · NPIP · PGA ON", cls: "subframe" }
+    { id: "pscsubnet", step: "2.2", x: 890, y: 225, w: 270, h: 265, label: "PSC SUBNET x.x.x.x/28 (min /28)", cls: "subframe" },
+    { id: "nodesubnet",step: "2.2", x: 350, y: 420, w: 510, h: 185, label: "NODE SUBNET x.x.x.x/y · NPIP · PGA ON", cls: "subframe" }
   ];
 
   /* ---------------- resource nodes ----------------
@@ -41,6 +41,12 @@
   var nodes = [
     { id: "admin", step: "0", x: 40, y: 150, w: 230, h: 110, title: "Admin / Analyst",
       lines: ["Browser / REST API / CLI", "private route — no public front door"] },
+
+    // The workspace-creator SA (the identity) — lives customer-side; the two per-project
+    // creator roles below are granted to it. It's what Data Platform impersonates in 2.4.
+    { id: "creatorsa", step: "2.1", x: 40, y: 700, w: 230, h: 92, title: "Workspace-creator SA", accent: true,
+      lines: ["databricks_account_admin_sa", "customer GCP SA · registered as a", "Databricks account admin · used in 2.4"],
+      identity: "IDENTITY · holds both read-only roles →" },
 
     // Databricks-owned side
     { id: "wssa", step: "2.4", x: 1265, y: 180, w: 350, h: 95, title: "Workspace SA", accent: true,
@@ -63,15 +69,19 @@
     { id: "routernat", step: "2.2", x: 620, y: 235, w: 230, h: 110, title: "Cloud Router + NAT",
       optional: true, lines: ["outbound only · for public package", "installs · removable with mirrors"] },
 
-    // creator-role grants (read-only) — shown as badges on the project frames
-    { id: "crSvc", step: "2.1", x: 620, y: 655, w: 120, h: 17, badge: true, title: "creator role (RO)" },
-    { id: "crHost", step: "2.2", x: 995, y: 182, w: 185, h: 18, badge: true, title: "creator role (RO) → creator SA" },
+    // The host-project half of the creator grant (a separate per-project custom role).
+    { id: "crole_host", step: "2.2", x: 600, y: 348, w: 260, h: 70, title: "Workspace-creator role · host (RO)",
+      lines: ["read-only. Permissions: forwardingRules.get/list ·", "networks / subnetworks.get(+getIamPolicy) · projects ·", "roles.get · services.get/list"] },
     { id: "frontendpsc", step: "2.2", x: 905, y: 258, w: 240, h: 95, title: "Frontend PSC endpoint",
-      lines: ["fwd-rule + internal IP", "workspace UI / REST · TLS 443"], pill: "psc" },
+      lines: ["forwarding rule → reserved private IP", "carries Workspace UI / API · TLS 443"], pill: "psc" },
     { id: "backendpsc", step: "2.2", x: 905, y: 365, w: 240, h: 80, title: "Backend PSC endpoint",
-      lines: ["fwd-rule + internal IP", "SCC relay · TCP 6666"], pill: "psc" },
-    { id: "firewall", step: "2.2", x: 350, y: 610, w: 0, h: 0, textOnly: true,
-      lines: ["Firewall: node → PSC 443 · 6666 · 8443–8451 · intra-subnet only · no inbound from internet"] },
+      lines: ["forwarding rule → reserved private IP", "carries SCC relay · TCP 6666"], pill: "psc" },
+    { id: "firewall", step: "2.2", x: 366, y: 576, w: 0, h: 0, textOnly: true,
+      lines: [
+        "Firewall — cluster egress allowed to the PSC subnet only:",
+        "443 = Workspace UI / API · 6666 = SCC relay · 8443–8451 = internal control",
+        "intra-subnet traffic allowed · no inbound from the internet"
+      ] },
 
     // Node subnet — runtime VMs (tabs 2/3)
     { id: "drivervm", step: "run", x: 370, y: 452, w: 220, h: 112, title: "Driver VM",
@@ -82,13 +92,19 @@
       identity: "IDENTITY · runs as Compute SA / Cluster SA" },
 
     // Service project
-    { id: "computesa", step: "2.8", x: 350, y: 705, w: 370, h: 110, title: "Compute SA (+ optional Cluster SA)",
-      lines: ["databricks-compute@<service-project> — GCE default", "identity the driver / executor VMs run as", "minimal perms (logging / metrics)"],
-      identity: "IDENTITY · the VMs' runtime identity — not the launcher" },
-    { id: "kms", step: "2.3", x: 350, y: 825, w: 370, h: 85, title: "Cloud KMS — CMEK key",
-      lines: ["customer keyring + key · STORAGE + MANAGED_SERVICES", "Google compute & storage agents: encrypt / decrypt"],
-      identity: "IDENTITY · Google agents + Workspace SA (MANAGED, 2.7)" },
-    { id: "wsbuckets", step: "2.8", x: 350, y: 920, w: 370, h: 70, title: "Workspace GCS buckets + GCE disks",
+    // The service-project half of the creator grant (a per-project custom role).
+    { id: "crole_svc", step: "2.1", x: 350, y: 700, w: 370, h: 90, title: "Workspace-creator role · service (RO)",
+      lines: ["custom role · read-only. Permissions:",
+              "projects.get/getIamPolicy · serviceAccounts.get/getIamPolicy",
+              "roles.get · cryptoKeys.getIamPolicy · services.get/list"],
+      identity: "IDENTITY · held by the workspace-creator SA (left)" },
+    { id: "computesa", step: "2.8", x: 350, y: 796, w: 370, h: 82, title: "Compute SA (+ optional Cluster SA)",
+      lines: ["databricks-compute@<svc-project> — GCE default", "the driver / executor VMs' runtime identity"],
+      identity: "IDENTITY · not the launcher · minimal perms" },
+    { id: "kms", step: "2.3", x: 350, y: 884, w: 370, h: 56, title: "Cloud KMS — CMEK key",
+      lines: ["customer keyring + key · STORAGE + MANAGED_SERVICES"],
+      identity: "IDENTITY · Google agents + Workspace SA (2.7)" },
+    { id: "wsbuckets", step: "2.8", x: 350, y: 946, w: 370, h: 50, title: "Workspace GCS buckets + GCE disks",
       lines: ["workspace system data + DBFS root · CMEK-encrypted"] },
 
     // Mail data projects (existing context)
@@ -110,7 +126,10 @@
   var edges = [
     { id: "e25", step: "2.5", d: "M1265,270 H1226 V1050 H430 V1000", label: "2.5 · project + resource roles → WS SA", lx: 690, ly: 1046 },
     { id: "e26", step: "2.6", d: "M1265,250 H1192 V600 H862", label: "2.6 · network role → WS SA", lx: 1015, ly: 592 },
-    { id: "e27", step: "2.7", d: "M1265,262 H1232 V1070 H344 V867 H350", label: "2.7 · CMEK MANAGED_SERVICES → WS SA", lx: 640, ly: 1066 }
+    { id: "e27", step: "2.7", d: "M1265,262 H1232 V1070 H344 V912 H350", label: "2.7 · CMEK MANAGED_SERVICES → WS SA", lx: 640, ly: 1066 },
+    // workspace-creator SA → the two per-project read-only roles it holds
+    { id: "ecrsvc", step: "2.1", d: "M270,745 H348", label: "granted 2.1", lx: 310, ly: 733 },
+    { id: "ecrhost", step: "2.2", d: "M270,730 V400 H598", label: "granted 2.2", lx: 445, ly: 392 }
   ];
 
   // PSC "wires": consumer endpoint → producer service attachment. Dashed/pending when
@@ -130,13 +149,14 @@
     { id: "2.1", label: "Create service project", short: "Service project", team: "foundation", repo: "service-project/",
       narrative: "Cloud Foundation creates the service project (the tenant for this one workspace), enables its APIs, attaches it to the existing Shared VPC host, and provisions the GCS/compute service agents. It also defines the read-only workspace-creator role and grants it to the creator SA on the service project.",
       privileges: ["resourcemanager.projectCreator", "billing.user", "compute.xpnAdmin", "resourcemanager.projectIamAdmin", "serviceusage.serviceUsageAdmin", "iam.roleAdmin"],
-      creates: ["service", "crSvc"], creatLabel: ["Service project (empty)", "Creator role — service (read-only) → creator SA"] },
+      creates: ["service", "creatorsa", "crole_svc"], edges: ["ecrsvc"],
+      creatLabel: ["Service project", "Workspace-creator SA (the identity)", "Creator role — service, read-only → the SA"] },
 
     { id: "2.2", label: "Create network", short: "Network", team: "network", repo: "network/",
       narrative: "Network Engineering builds the private landing zone inside the host project: VPC + node subnet (NPIP, PGA on) + PSC subnet, firewall, Cloud Router/NAT, the private DNS zone (zone only — records come in 2.6), and the two PSC endpoints, which come up PENDING. It also grants the read-only creator role on the host project.",
       privileges: ["compute.networkAdmin", "compute.securityAdmin", "dns.admin", "iam.roleAdmin"],
-      creates: ["dnszone", "routernat", "pscsubnet", "frontendpsc", "backendpsc", "nodesubnet", "firewall", "crHost"],
-      creatLabel: ["VPC + node/PSC subnets", "Cloud Router + NAT (optional)", "Private DNS zone (no records yet)", "Frontend + Backend PSC endpoints (PENDING)", "Creator role — host (read-only) → creator SA"] },
+      creates: ["dnszone", "routernat", "pscsubnet", "frontendpsc", "backendpsc", "nodesubnet", "firewall", "crole_host"], edges: ["ecrhost"],
+      creatLabel: ["VPC + node/PSC subnets", "Cloud Router + NAT (optional)", "Private DNS zone (no records yet)", "Frontend + Backend PSC endpoints (PENDING)", "Creator role — host, read-only → the SA"] },
 
     { id: "2.3", label: "CMEK key", short: "CMEK", team: "security", repo: "cmek/",
       narrative: "Cloud Security creates the CMEK keyring + key in the service project and grants encrypt/decrypt to the service project's Google-managed compute-system and gs-project-accounts agents — the STORAGE use case only. The MANAGED_SERVICES grant to the Workspace SA waits for 2.7.",
@@ -179,8 +199,8 @@
     // cluster launch
     l1a:   { c: "#2a78d6", d: "M270,205 H872 V305 H901", m: "b", label: "L1 · clusters/create · TLS 443", lx: 780, ly: 190, cross: [[300, 205, "B1"]] },
     l1b:   { c: "#2a78d6", d: "M1145,305 H1205 V332 H1263", m: "b", label: "B2", lx: 1180, ly: 300, cross: [[1205, 332, "B2"]] },
-    l2:    { c: "#eb6834", d: "M1263,600 H1225 V1058 H755 V760 H722", m: "o", label: "L2 · GCE: launch VMs — as the Workspace SA", lx: 985, ly: 1052, cross: [[1210, 1058, "B6"]] },
-    boot:  { c: "#eb6834", dash: "6 4", d: "M535,703 V607", m: "o", label: "VMs boot Runtime + Photon — as Compute SA", lx: 545, ly: 650 },
+    l2:    { c: "#eb6834", d: "M1263,600 H1225 V1058 H755 V837 H722", m: "o", label: "L2 · GCE: launch VMs — as the Workspace SA", lx: 985, ly: 1052, cross: [[1210, 1058, "B6"]] },
+    boot:  { c: "#eb6834", dash: "6 4", d: "M535,662 V607", m: "o", label: "VMs boot Runtime + Photon — as Compute SA", lx: 545, ly: 656 },
     tunnel:{ c: "#c3c2b7", dash: "4 3", d: "M450,420 V393", m: "g", label: "resolve tunnel.<region>", lx: 462, ly: 410 },
     l3:    { c: "#eb6834", d: "M860,505 H882 V405 H901", m: "o", label: "L3 · 6666", lx: 874, ly: 470 },
     b3:    { c: "#eb6834", d: "M1145,405 H1205 V432 H1263", m: "o", label: "B3", lx: 1180, ly: 400, cross: [[1205, 405, "B3"]] },
@@ -195,7 +215,7 @@
     // 2.4 read-only "verify settings" sub-animation (Account API, via the creator role)
     v_net:  { c: "#8a8880", dash: "5 4", d: "M1265,700 H1216 V332 H1149", m: "g", label: "verify · network / PSC (read-only)", lx: 1120, ly: 700 },
     v_svc:  { c: "#8a8880", dash: "5 4", d: "M1265,758 H1210 V1044 H520 V1000", m: "g", label: "verify · service project (read-only)", lx: 800, ly: 1040 },
-    v_cmek: { c: "#8a8880", dash: "5 4", d: "M1265,772 H1200 V1066 H346 V905 H350", m: "g", label: "verify · CMEK (read-only)", lx: 470, ly: 1062 }
+    v_cmek: { c: "#8a8880", dash: "5 4", d: "M1265,772 H1200 V1066 H346 V912 H350", m: "g", label: "verify · CMEK (read-only)", lx: 470, ly: 1062 }
   };
 
   var launchStages = [
@@ -265,7 +285,9 @@
   function drawNode(n) {
     var g = E("g", { class: "node", "data-step": n.step, "data-id": n.id }, layN);
     if (n.textOnly) {
-      txt(g, n.x, n.y, n.lines[0], { "font-size": fs(12), fill: "#52514e" });
+      (n.lines || []).forEach(function (ln, i) {
+        txt(g, n.x, n.y + i * fs(14), ln, { "font-size": fs(10.5), fill: "#52514e" });
+      });
       elByNode[n.id] = g; return;
     }
     if (n.badge) {
