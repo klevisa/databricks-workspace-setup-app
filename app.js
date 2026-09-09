@@ -36,7 +36,7 @@
       lines: ["Browser · REST / CLI", "reaches the VPC via corp VPN /", "private route — no public front door"] },
 
     // Databricks-owned side
-    { id: "wssa", step: "2.4", x: 1265, y: 180, w: 350, h: 95, title: "Workspace service account", accent: true,
+    { id: "wssa", step: "2.4", x: 1265, y: 180, w: 350, h: 95, title: "Workspace SA", accent: true,
       lines: ["db-<id>@prod-gcp-<region> · control-plane-owned", "the launcher — creates VMs across the boundary"],
       identity: "IDENTITY · the launcher — never the VMs' runtime identity" },
     { id: "plproxy", step: "0", x: 1265, y: 290, w: 350, h: 85, title: "PSC service attachment — plproxy",
@@ -253,19 +253,19 @@
       "stroke-width": isPeri ? 2 : 1,
       "stroke-dasharray": isPeri ? "8 5" : (isSub ? "4 3" : "0")
     }, g);
-    txt(g, c.x + 16, c.y + 20, c.label, { "font-size": 10.5, "font-weight": 700, "letter-spacing": "0.4", fill: isPeri ? "#d03b3b" : "#898781" });
+    txt(g, c.x + 16, c.y + 21, c.label, { "font-size": 12.5, "font-weight": 700, "letter-spacing": "0.3", fill: isPeri ? "#d03b3b" : "#898781" });
     elByContainer[c.id] = g;
   }
 
   function drawNode(n) {
     var g = E("g", { class: "node", "data-step": n.step, "data-id": n.id }, layN);
     if (n.textOnly) {
-      txt(g, n.x, n.y, n.lines[0], { "font-size": 10.5, fill: "#52514e" });
+      txt(g, n.x, n.y, n.lines[0], { "font-size": 12, fill: "#52514e" });
       elByNode[n.id] = g; return;
     }
     if (n.badge) {
       E("rect", { class: "box", x: n.x, y: n.y, width: n.w, height: n.h, rx: n.h / 2, fill: "#fff4ef", stroke: "#eb6834", "stroke-width": 1.2 }, g);
-      txt(g, n.x + n.w / 2, n.y + 13, n.title, { "font-size": 9.5, "font-weight": 700, "text-anchor": "middle", fill: "#b3421f" });
+      txt(g, n.x + n.w / 2, n.y + n.h / 2 + 4, n.title, { "font-size": 11, "font-weight": 700, "text-anchor": "middle", fill: "#b3421f" });
       elByNode[n.id] = g; return;
     }
     E("rect", { class: "box", x: n.x, y: n.y, width: n.w, height: n.h, rx: 8,
@@ -277,15 +277,15 @@
       E("rect", { x: n.x + n.w - ow - 8, y: n.y + 7, width: ow, height: 16, rx: 8, fill: "#fff7e6", stroke: "#e0b25a" }, g);
       txt(g, n.x + n.w - ow / 2 - 8, n.y + 19, "OPTIONAL", { "font-size": 9, "font-weight": 700, "text-anchor": "middle", fill: "#a86300" });
     }
-    txt(g, n.x + 12, n.y + 22, n.title, { "font-size": 12.5, "font-weight": 600, fill: "#0b0b0b" });
+    txt(g, n.x + 13, n.y + 25, n.title, { "font-size": 15, "font-weight": 600, fill: "#0b0b0b" });
     (n.lines || []).forEach(function (ln, i) {
-      txt(g, n.x + 12, n.y + 40 + i * 14.5, ln, { "font-size": 10.3, fill: "#52514e" });
+      txt(g, n.x + 13, n.y + 45 + i * 17, ln, { "font-size": 12.3, fill: "#52514e" });
     });
-    if (n.identity) txt(g, n.x + 12, n.y + n.h - 9, n.identity, { "font-size": 9.3, "font-weight": 600, fill: "#eb6834" });
+    if (n.identity) txt(g, n.x + 13, n.y + n.h - 10, n.identity, { "font-size": 11, "font-weight": 600, fill: "#eb6834" });
     if (n.pill) {
       var pg = E("g", { class: "statepill" }, g);
-      var pr = E("rect", { x: n.x + n.w - 96, y: n.y + n.h - 25, width: 88, height: 17, rx: 8.5, fill: "#fff", stroke: "#c3c2b7" }, pg);
-      var pt = txt(pg, n.x + n.w - 52, n.y + n.h - 13, "", { "font-size": 9.5, "font-weight": 700, "text-anchor": "middle", fill: "#898781" });
+      var pr = E("rect", { x: n.x + n.w - 104, y: n.y + n.h - 27, width: 96, height: 19, rx: 9.5, fill: "#fff", stroke: "#c3c2b7" }, pg);
+      var pt = txt(pg, n.x + n.w - 56, n.y + n.h - 14, "", { "font-size": 11, "font-weight": 700, "text-anchor": "middle", fill: "#898781" });
       g._pill = { rect: pr, text: pt, node: n };
     }
     g.classList.add("clickable");
@@ -297,9 +297,9 @@
     var g = E("g", { class: "flowg", "data-step": e.step }, layE);
     E("path", { class: "flow", d: e.d, stroke: "#eb6834", "stroke-width": 1.6, "stroke-dasharray": "5 4",
       fill: "none", "marker-end": "url(#arr-o)", opacity: 0.75 }, g);
-    var lw = e.label.length * 6 + 16;
-    E("rect", { x: e.lx - lw / 2, y: e.ly - 13, width: lw, height: 17, rx: 8.5, fill: "#fff4ef", stroke: "#f4c7b3" }, g);
-    txt(g, e.lx, e.ly, e.label, { "font-size": 9.5, "font-weight": 600, "text-anchor": "middle", fill: "#b3421f" });
+    var lw = e.label.length * 6.7 + 16;
+    E("rect", { x: e.lx - lw / 2, y: e.ly - 14, width: lw, height: 20, rx: 10, fill: "#fff4ef", stroke: "#f4c7b3" }, g);
+    txt(g, e.lx, e.ly, e.label, { "font-size": 11, "font-weight": 600, "text-anchor": "middle", fill: "#b3421f" });
     elByEdge[e.id] = g;
   }
 
@@ -311,9 +311,9 @@
     if (f.dash) p.setAttribute("stroke-dasharray", f.dash);
     // label
     if (f.label) {
-      var lw = f.label.length * 5.6 + 16;
-      E("rect", { x: f.lx - lw / 2, y: f.ly - 13, width: lw, height: 17, rx: 8.5, fill: "#fff", stroke: f.c }, g);
-      txt(g, f.lx, f.ly, f.label, { "font-size": 10, "font-weight": 600, "text-anchor": "middle", fill: f.c });
+      var lw = f.label.length * 6.4 + 16;
+      E("rect", { x: f.lx - lw / 2, y: f.ly - 14, width: lw, height: 20, rx: 10, fill: "#fff", stroke: f.c }, g);
+      txt(g, f.lx, f.ly, f.label, { "font-size": 11.5, "font-weight": 600, "text-anchor": "middle", fill: f.c });
     }
     // crossings
     (f.cross || []).forEach(function (cr) {
@@ -378,8 +378,8 @@
   function setWsStatus(text, running) {
     var g = elByNode.wssa; if (!g) return;
     if (!g._ws) {
-      var wr = E("rect", { x: 1265 + 350 - 150, y: 180 + 6, width: 142, height: 17, rx: 8.5, fill: "#fff", stroke: "#c3c2b7" }, g);
-      var wt = txt(g, 1265 + 350 - 79, 180 + 18, "", { "font-size": 9.5, "font-weight": 700, "text-anchor": "middle", fill: "#898781" });
+      var wr = E("rect", { x: 1265 + 350 - 158, y: 180 + 6, width: 150, height: 19, rx: 9.5, fill: "#fff", stroke: "#c3c2b7" }, g);
+      var wt = txt(g, 1265 + 350 - 83, 180 + 19, "", { "font-size": 11, "font-weight": 700, "text-anchor": "middle", fill: "#898781" });
       g._ws = { r: wr, t: wt };
     }
     if (!text) { g._ws.r.setAttribute("opacity", 0); g._ws.t.textContent = ""; return; }
