@@ -27,13 +27,13 @@
   /* ---------------- containers (frames) ---------------- */
   var containers = [
     { id: "perimeter", step: "0", x: 300, y: 140, w: 910, h: 945, label: "YAHOO GCP — VPC-SC SERVICE PERIMETER (TRUST BOUNDARY)", cls: "perimeter" },
-    { id: "host",      step: "0", x: 330, y: 190, w: 850, h: 445, label: "HOST PROJECT — SHARED VPC (NETWORK, CENTRALLY OWNED)", cls: "frame" },
-    { id: "service",   step: "2.1", x: 330, y: 665, w: 410, h: 375, label: "SERVICE PROJECT — DATABRICKS COMPUTE + STORAGE", cls: "frame" },
-    { id: "maildata",  step: "0", x: 770, y: 665, w: 410, h: 335, label: "YAHOO MAIL DATA PROJECTS (EXISTING)", cls: "frame" },
+    { id: "host",      step: "0", x: 330, y: 190, w: 850, h: 367, label: "HOST PROJECT — SHARED VPC (NETWORK, CENTRALLY OWNED)", cls: "frame" },
+    { id: "service",   step: "2.1", x: 330, y: 574, w: 410, h: 466, label: "SERVICE PROJECT — DATABRICKS COMPUTE + STORAGE", cls: "frame" },
+    { id: "maildata",  step: "0", x: 770, y: 663, w: 410, h: 337, label: "YAHOO MAIL DATA PROJECTS (EXISTING)", cls: "frame" },
     { id: "dbx",       step: "0", x: 1240, y: 140, w: 400, h: 700, label: "DATABRICKS-OWNED GCP PROJECTS — OUTSIDE THE PERIMETER", cls: "frame" },
     { id: "internet",  step: "0", x: 1240, y: 870, w: 400, h: 120, label: "PUBLIC INTERNET", cls: "frame" },
     { id: "pscsubnet", step: "2.2", x: 890, y: 225, w: 270, h: 265, label: "PSC SUBNET x.x.x.x/28 (min /28)", cls: "subframe" },
-    { id: "nodesubnet",step: "2.2", x: 350, y: 420, w: 510, h: 185, label: "NODE SUBNET x.x.x.x/y · NPIP · PGA ON", cls: "subframe" }
+    { id: "nodesubnet",step: "2.2", x: 350, y: 420, w: 510, h: 122, label: "NODE SUBNET x.x.x.x/y · NPIP · PGA ON", cls: "subframe" }
   ];
 
   /* ---------------- resource nodes ----------------
@@ -69,13 +69,11 @@
         conn: ["Carries SCC relay · TCP 6666 · always cluster-initiated"] } },
     { id: "controlplane", step: "0", x: 1265, y: 490, w: 350, h: 175, title: "Regional control plane",
       lines: ["Workspace UI/API · Cluster Manager · Jobs"],
-      identity: "IDENTITY · Databricks-managed; reached only via PSC",
       detail: {
         what: "The Databricks-managed regional services for this workspace: Workspace UI/API, the Cluster Manager that launches compute (acting as the Workspace SA), the Job Scheduler, and more.",
         conn: ["Reached only via the frontend PSC endpoint — no public ingress", "Control-plane data (notebooks, results, secrets) is CMEK-encrypted (2.7)"] } },
     { id: "accountapi", step: "0", x: 1265, y: 680, w: 350, h: 140, title: "Account API",
       lines: ["Provisioning + IdP sync"],
-      identity: "IDENTITY · account admin (Google OIDC tokens)",
       detail: {
         what: "The account-level control plane at accounts.gcp.databricks.com. It provisions workspaces and syncs identities.",
         conn: ["Workspace provisioning (creates the workspace in 2.4)", "IdP sync: Okta → Account API", "Auth: account admin via Google OIDC tokens"] } },
@@ -96,7 +94,7 @@
 
     // The host-project half of the creator grant (a separate per-project custom role),
     // held by the same workspace-creator SA that lives in the service project.
-    { id: "crole_host", step: "2.2", x: 888, y: 526, w: 260, h: 74, title: "Creator role · host",
+    { id: "crole_host", step: "2.2", x: 895, y: 463, w: 260, h: 74, title: "Creator role · host",
       lines: ["Read-only settings validation"],
       identity: "IDENTITY · held by the workspace-creator SA",
       detail: {
@@ -119,22 +117,20 @@
         owner: "network",
         conn: ["Carries SCC relay · TCP 6666", "PENDING at 2.2 → ACCEPTED at 2.4"],
         repo: "network/" } },
-    { id: "firewall", step: "2.2", x: 366, y: 576, w: 0, h: 0, textOnly: true,
+    { id: "firewall", step: "2.2", x: 373, y: 480, w: 0, h: 0, textOnly: true, deployOnly: true,
       lines: [
         "Firewall — cluster egress allowed to the PSC subnet only",
         "no inbound from the internet · intra-subnet traffic allowed"
       ] },
 
     // Node subnet — runtime VMs (tabs 2/3)
-    { id: "drivervm", step: "run", x: 370, y: 452, w: 220, h: 112, title: "Driver VM",
+    { id: "drivervm", step: "run", x: 370, y: 452, w: 220, h: 86, title: "Driver VM",
       lines: ["Runtime + Photon"],
-      identity: "IDENTITY · runs as Compute SA / Cluster SA",
       detail: {
         what: "The cluster driver in the private node subnet. Runs the Databricks Runtime and the Photon vectorized engine on CMEK-encrypted disks.",
         conn: ["Runs as the Compute SA (or a custom Cluster SA) — not the Workspace SA"] } },
-    { id: "execvm", step: "run", x: 610, y: 452, w: 220, h: 112, title: "Executor VMs × N",
+    { id: "execvm", step: "run", x: 610, y: 452, w: 220, h: 86, title: "Executor VMs × N",
       lines: ["Spark executors (autoscaling)"],
-      identity: "IDENTITY · runs as Compute SA / Cluster SA",
       detail: {
         what: "Autoscaling Spark executors running Photon on CMEK-encrypted disks in the node subnet. They do the actual data scan.",
         conn: ["Run as the Compute SA (or a custom Cluster SA)", "Read Mail data as the vended UC storage-credential SA — never their own SA"] } },
@@ -160,7 +156,29 @@
         role: "lpw.databricks.workspace.creator.service.v2",
         perms: ["cloudkms.cryptoKeys.getIamPolicy", "compute.projects.get", "iam.roles.get", "iam.serviceAccounts.get", "iam.serviceAccounts.getIamPolicy", "resourcemanager.projects.get", "resourcemanager.projects.getIamPolicy", "serviceusage.services.get", "serviceusage.services.list"],
         repo: "service-project/creator-roles.tf" } },
-    { id: "computesa", step: "2.8", x: 350, y: 842, w: 370, h: 74, title: "Compute SA",
+    // Workspace-SA operator roles — created + granted to the Workspace SA at 2.5.
+    { id: "projrole", step: "2.5", x: 350, y: 596, w: 370, h: 48, title: "Workspace-SA project role",
+      lines: [],
+      identity: "IDENTITY · granted to the WS SA · read + actAs",
+      detail: {
+        what: "Custom role on the service project, created and granted to the Workspace SA in step 2.5. Project-wide read + actAs — broad but harmless (no create/modify).",
+        owner: "iam",
+        role: "lpw.databricks.project.role.v2",
+        permsLabel: " (read + actAs)",
+        perms: ["compute.disks.list", "compute.globalOperations.list", "compute.instances.list", "compute.regionOperations.list", "compute.regions.get", "compute.reservations.get", "compute.reservations.list", "compute.spotAssistants.get", "compute.zoneOperations.list", "compute.zones.get", "compute.zones.list", "iam.serviceAccounts.actAs", "resourcemanager.projects.get", "serviceusage.quotas.get", "serviceusage.services.list", "storage.buckets.list"],
+        repo: "workspace-sa-roles/roles.tf" } },
+    { id: "resrole", step: "2.5", x: 350, y: 648, w: 370, h: 48, title: "Workspace-SA resource role",
+      lines: [],
+      identity: "IDENTITY · granted to the WS SA · creates storage + VMs",
+      detail: {
+        what: "Custom role on the service project, created and granted to the Workspace SA in step 2.5. Carries the create/manage permissions that let the SA build the workspace's disks, instances, and buckets at finalize (2.8).",
+        owner: "iam",
+        role: "lpw.databricks.resource.role.v2",
+        permsLabel: " (create / manage)",
+        perms: ["compute.disks.create", "compute.disks.delete", "compute.disks.get", "compute.disks.resize", "compute.disks.setLabels", "compute.disks.update", "compute.disks.use", "compute.disks.useReadOnly", "compute.instances.attachDisk", "compute.instances.create", "compute.instances.delete", "compute.instances.detachDisk", "compute.instances.get", "compute.instances.getGuestAttributes", "compute.instances.getSerialPortOutput", "compute.instances.setLabels", "compute.instances.setMetadata", "compute.instances.setServiceAccount", "compute.instances.setTags", "compute.instances.update", "storage.buckets.create", "storage.buckets.delete", "storage.buckets.get", "storage.buckets.getIamPolicy", "storage.buckets.setIamPolicy", "storage.buckets.update", "storage.multipartUploads.abort", "storage.multipartUploads.create", "storage.multipartUploads.list", "storage.multipartUploads.listParts", "storage.objects.create", "storage.objects.delete", "storage.objects.get", "storage.objects.list", "storage.objects.update"],
+        extra: [ { label: "IAM condition — scoped to this workspace", body: "Bound project-wide but limited by an IAM condition to resources whose names carry both <code>databricks</code> and this workspace's id, so the SA can only touch this workspace's own buckets/disks/instances." } ],
+        repo: "workspace-sa-roles/roles.tf" } },
+    { id: "computesa", step: "2.8", x: 350, y: 842, w: 370, h: 74, title: "Compute SA", accent: true,
       lines: ["The VMs' runtime identity"],
       identity: "IDENTITY · not the launcher · minimal perms",
       detail: {
@@ -169,7 +187,6 @@
         conn: ["Default: <code>databricks-compute@&lt;svc-project&gt;</code> (GCE default SA)", "Created in phase 2 (2.8)"] } },
     { id: "kms", step: "2.3", x: 350, y: 922, w: 370, h: 52, title: "Cloud KMS — CMEK key",
       lines: ["Customer-managed encryption key"],
-      identity: "IDENTITY · Google agents + Workspace SA (2.7)",
       detail: {
         what: "The customer keyring + key that encrypts the workspace. Two use cases: STORAGE (buckets/disks) and MANAGED_SERVICES (control-plane data).",
         owner: "security",
@@ -212,7 +229,7 @@
   // bottom corridor so they never cross the Yahoo Mail data projects frame.
   var edges = [
     { id: "e25", step: "2.5", d: "M1265,270 H1226 V1058 H430 V1040", label: "2.5 · project + resource roles → WS SA", lx: 690, ly: 1054 },
-    { id: "e26", step: "2.6", d: "M1265,250 H1192 V600 H862", label: "2.6 · network role → WS SA", lx: 1015, ly: 592 },
+    { id: "e26", step: "2.6", d: "M1265,250 H1192 V540 H862", label: "2.6 · network role → WS SA", lx: 1015, ly: 532 },
     { id: "e27", step: "2.7", d: "M1265,262 H1232 V1076 H344 V948 H350", label: "2.7 · CMEK MANAGED_SERVICES → WS SA", lx: 640, ly: 1072 }
   ];
 
@@ -258,7 +275,7 @@
     { id: "2.5", label: "Workspace-SA operator roles", short: "Operator roles", team: "iam", repo: "workspace-sa-roles/",
       narrative: "Cloud IAM defines and grants the Project role and the workspace-scoped Resource role to the Workspace SA on the service project. The Resource role carries storage.buckets.create / compute.instances.create — the permissions that let the SA build the workspace's storage and VMs — scoped by an IAM condition to this workspace's resources.",
       privileges: ["iam.roleAdmin  (service project)", "resourcemanager.projectIamAdmin  (service project)"],
-      creates: [], edges: ["e25"], creatLabel: ["Project role + Resource role → Workspace SA"] },
+      creates: ["projrole", "resrole"], edges: ["e25"], creatLabel: ["Project role + Resource role → Workspace SA"] },
 
     { id: "2.6", label: "Post-workspace config", short: "Network role + DNS", team: "network", repo: "post-workspace/",
       narrative: "Network Engineering grants the Workspace SA the custom network role (subnetworks.get/use) on the node subnet so it can place VMs across the Shared-VPC boundary, and writes the four DNS A-records into the zone so workspace hostnames resolve to the private PSC IPs.",
@@ -284,7 +301,7 @@
     l1a:   { c: "#2a78d6", d: "M270,205 H872 V305 H901", m: "b", label: "L1 · clusters/create · TLS 443", lx: 780, ly: 190, cross: [[300, 205, "B1"]] },
     l1b:   { c: "#2a78d6", d: "M1145,305 H1205 V332 H1263", m: "b", label: "B2", lx: 1180, ly: 300, cross: [[1205, 332, "B2"]] },
     l2:    { c: "#eb6834", d: "M1263,600 H1225 V1064 H755 V879 H722", m: "o", label: "L2 · GCE: launch VMs — as the Workspace SA", lx: 985, ly: 1058, cross: [[1210, 1064, "B6"]] },
-    boot:  { c: "#eb6834", dash: "6 4", d: "M535,662 V607", m: "o", label: "VMs boot Runtime + Photon — as Compute SA", lx: 545, ly: 656 },
+    boot:  { c: "#eb6834", dash: "6 4", d: "M480,560 V540", m: "o", label: "VMs boot Runtime + Photon — as Compute SA", lx: 545, ly: 556 },
     tunnel:{ c: "#c3c2b7", dash: "4 3", d: "M450,420 V393", m: "g", label: "resolve tunnel.<region>", lx: 462, ly: 410 },
     l3:    { c: "#eb6834", d: "M860,505 H882 V405 H901", m: "o", label: "L3 · 6666", lx: 874, ly: 470 },
     b3:    { c: "#eb6834", d: "M1145,405 H1205 V432 H1263", m: "o", label: "B3", lx: 1180, ly: 400, cross: [[1205, 405, "B3"]] },
@@ -293,8 +310,8 @@
     n1b:   { c: "#2a78d6", d: "M1145,305 H1205 V332 H1263", m: "b", label: "B2", lx: 1180, ly: 300, cross: [[1205, 332, "B2"]] },
     n2:    { c: "#eb6834", d: "M860,470 H884 V300 H901", m: "o", label: "F4 · UC metadata + token · 443", lx: 690, ly: 444 },
     f5:    { c: "#eb6834", dash: "6 4", d: "M860,525 H872 V405 H901", m: "o", label: "F5 · SCC relay · 6666", lx: 690, ly: 592 },
-    f7:    { c: "#1baf7a", d: "M700,565 V700 H784", m: "a", label: "F7 · read (UC RO SA)", lx: 515, ly: 648, cross: [[786, 700, "ingress"]] },
-    f8:    { c: "#1baf7a", d: "M745,565 V806 H784", m: "a", label: "F8 · write (UC RW SA)", lx: 515, ly: 670, cross: [[786, 806, "ingress"]] },
+    f7:    { c: "#1baf7a", d: "M700,538 V700 H784", m: "a", label: "F7 · read (UC RO SA)", lx: 515, ly: 640, cross: [[786, 700, "ingress"]] },
+    f8:    { c: "#1baf7a", d: "M745,538 V806 H784", m: "a", label: "F8 · write (UC RW SA)", lx: 515, ly: 662, cross: [[786, 806, "ingress"]] },
     ret:   { c: "#2a78d6", dash: "5 4", d: "M901,320 H860 V472 H832", m: "b", label: "results → analyst (nothing data-bearing via control plane)", lx: 690, ly: 700 },
     // 2.4 read-only "verify settings" sub-animation (Account API, via the creator role)
     v_net:  { c: "#8a8880", dash: "5 4", d: "M1265,700 H1216 V332 H1149", m: "g", label: "verify · network / PSC (read-only)", lx: 1120, ly: 700 },
@@ -554,6 +571,8 @@
     var max = ORDER.length - 1;
     showDeployNodes(max);
     applyDeployStates(max);
+    // deploy-only annotations (e.g. the firewall note) would collide with runtime VMs
+    nodes.forEach(function (n) { if (n.deployOnly && elByNode[n.id]) toggle(elByNode[n.id], false); });
     // setup-time grant edges are deployment-only; hide them under the runtime flows
     edges.forEach(function (e) { toggle(elByEdge[e.id], false); });
   }
