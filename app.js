@@ -713,25 +713,19 @@
     document.body.classList.add("editmode");
     var layEdit = E("g", { id: "layEdit" }, svg);   // outline + handles, on top of all
 
-    // ---- edit UI: top bar + side panel ----
+    // ---- edit UI: one compact toolbar docked across the very top ----
     var bar = document.createElement("div");
-    bar.className = "editbar";
-    bar.innerHTML = 'EDIT MODE · click a box to select · drag to move · handles to resize · edit text at right ' +
+    bar.className = "edittools";
+    bar.innerHTML =
+      '<span class="et-hint" id="epTitle">EDIT · click a box</span>' +
+      '<textarea id="epText" rows="2" spellcheck="false" placeholder="first line = title · rest = body" hidden></textarea>' +
+      '<label class="et-dim" hidden>W <input id="epW" type="number" step="1"></label>' +
+      '<label class="et-dim" hidden>H <input id="epH" type="number" step="1"></label>' +
+      '<button id="epReset" type="button" hidden>Reset</button>' +
       '<button id="copyLayout" type="button">Copy layout</button>';
     document.querySelector(".canvas-wrap").appendChild(bar);
-
-    var panel = document.createElement("div");
-    panel.className = "editpanel";
-    panel.hidden = true;
-    panel.innerHTML =
-      '<h4 id="epTitle">—</h4>' +
-      '<textarea id="epText" rows="5" spellcheck="false" placeholder="first line = title · remaining lines = body"></textarea>' +
-      '<div class="dims">' +
-      '<label>W <input id="epW" type="number" step="1"></label>' +
-      '<label>H <input id="epH" type="number" step="1"></label>' +
-      '<button id="epReset" type="button">Reset box</button>' +
-      '</div>';
-    document.querySelector(".canvas-wrap").appendChild(panel);
+    var editFields = [].slice.call(bar.querySelectorAll("#epText, .et-dim, #epReset"));
+    function showFields(on) { editFields.forEach(function (el) { el.hidden = !on; }); }
 
     document.getElementById("copyLayout").addEventListener("click", function () {
       var s = JSON.stringify(window.getLayout(), null, 2);
@@ -785,7 +779,7 @@
     function selectBox(id) {
       sel = id; drawHandles(id);
       var b = base(id), e = edits[id] || {}, c = cur(id);
-      panel.hidden = false;
+      showFields(true);
       document.getElementById("epTitle").textContent = id;
       var v;
       if (containerById[id]) v = (e.label != null ? e.label : b.label) || "";
@@ -795,7 +789,7 @@
       document.getElementById("epW").value = Math.round(c.w);
       document.getElementById("epH").value = Math.round(c.h);
     }
-    function deselect() { sel = null; drawHandles(null); panel.hidden = true; }
+    function deselect() { sel = null; drawHandles(null); showFields(false); document.getElementById("epTitle").textContent = "EDIT · click a box"; }
 
     // ---- panel edits (live) ----
     document.getElementById("epText").addEventListener("input", function () {
