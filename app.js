@@ -9,6 +9,13 @@
   var ORDER = ["0", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8"];
   var oi = function (s) { return ORDER.indexOf(String(s)); };
 
+  /* ===== Global text-size lever (code-only — NOT exposed in the UI) =====
+     1.0 = base sizes. Raise to enlarge ALL diagram text proportionally, e.g.
+     1.25 = +25%, 1.4 = +40%. Line spacing and label boxes scale with it too.
+     Very large values will eventually crowd the fixed-size boxes. */
+  var FONT_SCALE = 1.2;
+  function fs(px) { return Math.round(px * FONT_SCALE * 10) / 10; }
+
   var TEAM = {
     foundation: { name: "Cloud Foundation / Landing Zone", color: "#5b6b8c" },
     network:    { name: "Network Engineering",             color: "#2a78d6" },
@@ -117,7 +124,7 @@
 
   /* ---------------- deployment steps ---------------- */
   var steps = [
-    { id: "0", label: "Starting point", short: "Before we begin", team: null,
+    { id: "0", label: "Starting point", short: "Starting Point", team: null,
       narrative: "What already exists before the build. Yahoo's VPC-SC perimeter and Shared-VPC host project are long-standing. On the Databricks side (outside the perimeter) the region's PSC service attachments (plproxy, ngrok), the regional control plane, and the Account API already run. The Mail data lake and BigQuery exist and are governed later.",
       privileges: [], creates: [],
       note: "Four service accounts to keep straight: Workspace SA (launcher, control-plane-owned), Compute SA (what the VMs run as), optional Cluster SA (custom per-cluster), and the vended UC storage-credential SA (governed reads)." },
@@ -253,19 +260,19 @@
       "stroke-width": isPeri ? 2 : 1,
       "stroke-dasharray": isPeri ? "8 5" : (isSub ? "4 3" : "0")
     }, g);
-    txt(g, c.x + 16, c.y + 21, c.label, { "font-size": 12.5, "font-weight": 700, "letter-spacing": "0.3", fill: isPeri ? "#d03b3b" : "#898781" });
+    txt(g, c.x + 16, c.y + fs(17), c.label, { "font-size": fs(12), "font-weight": 700, "letter-spacing": "0.2", fill: isPeri ? "#d03b3b" : "#898781" });
     elByContainer[c.id] = g;
   }
 
   function drawNode(n) {
     var g = E("g", { class: "node", "data-step": n.step, "data-id": n.id }, layN);
     if (n.textOnly) {
-      txt(g, n.x, n.y, n.lines[0], { "font-size": 12, fill: "#52514e" });
+      txt(g, n.x, n.y, n.lines[0], { "font-size": fs(12), fill: "#52514e" });
       elByNode[n.id] = g; return;
     }
     if (n.badge) {
       E("rect", { class: "box", x: n.x, y: n.y, width: n.w, height: n.h, rx: n.h / 2, fill: "#fff4ef", stroke: "#eb6834", "stroke-width": 1.2 }, g);
-      txt(g, n.x + n.w / 2, n.y + n.h / 2 + 4, n.title, { "font-size": 11, "font-weight": 700, "text-anchor": "middle", fill: "#b3421f" });
+      txt(g, n.x + n.w / 2, n.y + n.h / 2 + 4, n.title, { "font-size": fs(10.5), "font-weight": 700, "text-anchor": "middle", fill: "#b3421f" });
       elByNode[n.id] = g; return;
     }
     E("rect", { class: "box", x: n.x, y: n.y, width: n.w, height: n.h, rx: 8,
@@ -273,19 +280,20 @@
       "stroke-width": (n.optional || n.accent) ? 1.5 : 1,
       "stroke-dasharray": n.optional ? "6 4" : "0" }, g);
     if (n.optional) {
-      var ow = 66;
-      E("rect", { x: n.x + n.w - ow - 8, y: n.y + 7, width: ow, height: 16, rx: 8, fill: "#fff7e6", stroke: "#e0b25a" }, g);
-      txt(g, n.x + n.w - ow / 2 - 8, n.y + 19, "OPTIONAL", { "font-size": 9, "font-weight": 700, "text-anchor": "middle", fill: "#a86300" });
+      var ow = 68;
+      E("rect", { x: n.x + n.w - ow - 8, y: n.y + n.h - 24, width: ow, height: 17, rx: 8.5, fill: "#fff7e6", stroke: "#e0b25a" }, g);
+      txt(g, n.x + n.w - ow / 2 - 8, n.y + n.h - 12, "OPTIONAL", { "font-size": fs(9), "font-weight": 700, "text-anchor": "middle", fill: "#a86300" });
     }
-    txt(g, n.x + 13, n.y + 25, n.title, { "font-size": 15, "font-weight": 600, fill: "#0b0b0b" });
+    var tF = fs(14.5), lF = fs(12), tY = n.y + tF + 7, lH = lF + fs(3.4);
+    txt(g, n.x + 13, tY, n.title, { "font-size": tF, "font-weight": 600, fill: "#0b0b0b" });
     (n.lines || []).forEach(function (ln, i) {
-      txt(g, n.x + 13, n.y + 45 + i * 17, ln, { "font-size": 12.3, fill: "#52514e" });
+      txt(g, n.x + 13, tY + fs(11) + i * lH, ln, { "font-size": lF, fill: "#52514e" });
     });
-    if (n.identity) txt(g, n.x + 13, n.y + n.h - 10, n.identity, { "font-size": 11, "font-weight": 600, fill: "#eb6834" });
+    if (n.identity) txt(g, n.x + 13, n.y + n.h - 9, n.identity, { "font-size": fs(10.3), "font-weight": 600, fill: "#eb6834" });
     if (n.pill) {
       var pg = E("g", { class: "statepill" }, g);
       var pr = E("rect", { x: n.x + n.w - 104, y: n.y + n.h - 27, width: 96, height: 19, rx: 9.5, fill: "#fff", stroke: "#c3c2b7" }, pg);
-      var pt = txt(pg, n.x + n.w - 56, n.y + n.h - 14, "", { "font-size": 11, "font-weight": 700, "text-anchor": "middle", fill: "#898781" });
+      var pt = txt(pg, n.x + n.w - 56, n.y + n.h - 14, "", { "font-size": fs(10.5), "font-weight": 700, "text-anchor": "middle", fill: "#898781" });
       g._pill = { rect: pr, text: pt, node: n };
     }
     g.classList.add("clickable");
@@ -297,9 +305,9 @@
     var g = E("g", { class: "flowg", "data-step": e.step }, layE);
     E("path", { class: "flow", d: e.d, stroke: "#eb6834", "stroke-width": 1.6, "stroke-dasharray": "5 4",
       fill: "none", "marker-end": "url(#arr-o)", opacity: 0.75 }, g);
-    var lw = e.label.length * 6.7 + 16;
-    E("rect", { x: e.lx - lw / 2, y: e.ly - 14, width: lw, height: 20, rx: 10, fill: "#fff4ef", stroke: "#f4c7b3" }, g);
-    txt(g, e.lx, e.ly, e.label, { "font-size": 11, "font-weight": 600, "text-anchor": "middle", fill: "#b3421f" });
+    var lw = e.label.length * fs(6) + 16;
+    E("rect", { x: e.lx - lw / 2, y: e.ly - fs(11), width: lw, height: fs(16.5), rx: 10, fill: "#fff4ef", stroke: "#f4c7b3" }, g);
+    txt(g, e.lx, e.ly, e.label, { "font-size": fs(10.5), "font-weight": 600, "text-anchor": "middle", fill: "#b3421f" });
     elByEdge[e.id] = g;
   }
 
@@ -311,9 +319,9 @@
     if (f.dash) p.setAttribute("stroke-dasharray", f.dash);
     // label
     if (f.label) {
-      var lw = f.label.length * 6.4 + 16;
-      E("rect", { x: f.lx - lw / 2, y: f.ly - 14, width: lw, height: 20, rx: 10, fill: "#fff", stroke: f.c }, g);
-      txt(g, f.lx, f.ly, f.label, { "font-size": 11.5, "font-weight": 600, "text-anchor": "middle", fill: f.c });
+      var lw = f.label.length * fs(6.1) + 16;
+      E("rect", { x: f.lx - lw / 2, y: f.ly - fs(11.5), width: lw, height: fs(17), rx: 10, fill: "#fff", stroke: f.c }, g);
+      txt(g, f.lx, f.ly, f.label, { "font-size": fs(11), "font-weight": 600, "text-anchor": "middle", fill: f.c });
     }
     // crossings
     (f.cross || []).forEach(function (cr) {
@@ -379,7 +387,7 @@
     var g = elByNode.wssa; if (!g) return;
     if (!g._ws) {
       var wr = E("rect", { x: 1265 + 350 - 158, y: 180 + 6, width: 150, height: 19, rx: 9.5, fill: "#fff", stroke: "#c3c2b7" }, g);
-      var wt = txt(g, 1265 + 350 - 83, 180 + 19, "", { "font-size": 11, "font-weight": 700, "text-anchor": "middle", fill: "#898781" });
+      var wt = txt(g, 1265 + 350 - 83, 180 + 19, "", { "font-size": fs(10.5), "font-weight": 700, "text-anchor": "middle", fill: "#898781" });
       g._ws = { r: wr, t: wt };
     }
     if (!text) { g._ws.r.setAttribute("opacity", 0); g._ws.t.textContent = ""; return; }
@@ -451,7 +459,7 @@
       var li = document.createElement("li");
       li.className = "step-item" + (i === activeIdx ? " active" : "") + (i < activeIdx ? " done" : "");
       var badge = kind === "deploy" ? (s.id === "0" ? "•" : s.id) : s.id;
-      var team = s.team ? TEAM[s.team].name : (kind === "deploy" ? "context" : "");
+      var team = s.team ? TEAM[s.team].name : "";
       li.innerHTML = '<span class="step-badge">' + badge + '</span><span class="step-meta"><span class="step-name">' +
         (s.short || s.title) + '</span><span class="step-team">' + team + '</span></span>';
       li.addEventListener("click", function () { goto(i); });
