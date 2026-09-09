@@ -234,7 +234,7 @@
       narrative: "Cloud Foundation creates the service project (the tenant for this one workspace), enables its APIs, attaches it to the existing Shared VPC host, and provisions the GCS/compute service agents. It also defines the read-only workspace-creator role and grants it to the creator SA on the service project.",
       privileges: ["resourcemanager.projectCreator", "billing.user", "compute.xpnAdmin", "resourcemanager.projectIamAdmin", "serviceusage.serviceUsageAdmin", "iam.roleAdmin"],
       creates: ["service", "creatorsa", "crole_svc"],
-      creatLabel: ["Service project", "Workspace-creator SA (lives here)", "Creator role — service, read-only (held by the SA)"] },
+      creatLabel: ["Service project", "Workspace-creator SA", "Creator role — service, read-only (held by the SA)"] },
 
     { id: "2.2", label: "Create network", short: "Network", team: "network", repo: "network/",
       narrative: "Network Engineering builds the private landing zone inside the host project: VPC + node subnet (NPIP, PGA on) + PSC subnet, firewall, Cloud Router/NAT, the private DNS zone (zone only — records come in 2.6), and the two PSC endpoints, which come up PENDING. It also grants the read-only creator role on the host project.",
