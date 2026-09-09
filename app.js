@@ -19,7 +19,7 @@
 
   /* ---------------- containers (frames) ---------------- */
   var containers = [
-    { id: "perimeter", step: "0", x: 300, y: 140, w: 910, h: 900, label: "YAHOO GCP — VPC-SC SERVICE PERIMETER (TRUST BOUNDARY)", cls: "perimeter" },
+    { id: "perimeter", step: "0", x: 300, y: 140, w: 910, h: 945, label: "YAHOO GCP — VPC-SC SERVICE PERIMETER (TRUST BOUNDARY)", cls: "perimeter" },
     { id: "host",      step: "0", x: 330, y: 190, w: 850, h: 445, label: "HOST PROJECT — SHARED VPC (NETWORK, CENTRALLY OWNED)", cls: "frame" },
     { id: "service",   step: "2.1", x: 330, y: 665, w: 410, h: 335, label: "SERVICE PROJECT — DATABRICKS COMPUTE + STORAGE", cls: "frame" },
     { id: "maildata",  step: "0", x: 770, y: 665, w: 410, h: 335, label: "YAHOO MAIL DATA PROJECTS (EXISTING)", cls: "frame" },
@@ -57,7 +57,7 @@
       optional: true, lines: ["outbound only · for public package", "installs · removable with mirrors"] },
 
     // creator-role grants (read-only) — shown as badges on the project frames
-    { id: "crSvc", step: "2.1", x: 545, y: 657, w: 195, h: 18, badge: true, title: "creator role (RO) → creator SA" },
+    { id: "crSvc", step: "2.1", x: 620, y: 655, w: 120, h: 17, badge: true, title: "creator role (RO)" },
     { id: "crHost", step: "2.2", x: 995, y: 182, w: 185, h: 18, badge: true, title: "creator role (RO) → creator SA" },
     { id: "frontendpsc", step: "2.2", x: 905, y: 258, w: 240, h: 95, title: "Frontend PSC endpoint",
       lines: ["fwd-rule + internal IP", "workspace UI / REST · TLS 443"], pill: "psc" },
@@ -103,9 +103,9 @@
   // grant edges from the Workspace SA into the perimeter. Routed via the right gap +
   // bottom corridor so they never cross the Yahoo Mail data projects frame.
   var edges = [
-    { id: "e25", step: "2.5", d: "M1265,270 H1226 V1014 H430 V1000", label: "2.5 · project + resource roles", lx: 700, ly: 1013 },
-    { id: "e26", step: "2.6", d: "M1265,250 H1192 V600 H862", label: "2.6 · network role", lx: 1015, ly: 592 },
-    { id: "e27", step: "2.7", d: "M1265,262 H1232 V1034 H344 V867 H350", label: "2.7 · CMEK (MANAGED_SERVICES)", lx: 585, ly: 1035 }
+    { id: "e25", step: "2.5", d: "M1265,270 H1226 V1050 H430 V1000", label: "2.5 · project + resource roles → WS SA", lx: 690, ly: 1046 },
+    { id: "e26", step: "2.6", d: "M1265,250 H1192 V600 H862", label: "2.6 · network role → WS SA", lx: 1015, ly: 592 },
+    { id: "e27", step: "2.7", d: "M1265,262 H1232 V1070 H344 V867 H350", label: "2.7 · CMEK MANAGED_SERVICES → WS SA", lx: 640, ly: 1066 }
   ];
 
   // PSC "wires": consumer endpoint → producer service attachment. Dashed/pending when
@@ -174,7 +174,7 @@
     // cluster launch
     l1a:   { c: "#2a78d6", d: "M270,205 H872 V305 H901", m: "b", label: "L1 · clusters/create · TLS 443", lx: 780, ly: 190, cross: [[300, 205, "B1"]] },
     l1b:   { c: "#2a78d6", d: "M1145,305 H1205 V332 H1263", m: "b", label: "B2", lx: 1180, ly: 300, cross: [[1205, 332, "B2"]] },
-    l2:    { c: "#eb6834", d: "M1263,600 H1225 V1022 H755 V760 H722", m: "o", label: "L2 · GCE: launch VMs — as the Workspace SA", lx: 985, ly: 1012, cross: [[1210, 1022, "B6"]] },
+    l2:    { c: "#eb6834", d: "M1263,600 H1225 V1058 H755 V760 H722", m: "o", label: "L2 · GCE: launch VMs — as the Workspace SA", lx: 985, ly: 1052, cross: [[1210, 1058, "B6"]] },
     boot:  { c: "#eb6834", dash: "6 4", d: "M535,703 V607", m: "o", label: "VMs boot Runtime + Photon — as Compute SA", lx: 545, ly: 650 },
     tunnel:{ c: "#c3c2b7", dash: "4 3", d: "M450,420 V393", m: "g", label: "resolve tunnel.<region>", lx: 462, ly: 410 },
     l3:    { c: "#eb6834", d: "M860,505 H882 V405 H901", m: "o", label: "L3 · 6666", lx: 874, ly: 470 },
@@ -182,15 +182,15 @@
     // notebook runtime
     n1:    { c: "#2a78d6", d: "M270,205 H872 V305 H901", m: "b", label: "F1 · notebook command · TLS 443", lx: 790, ly: 190, cross: [[300, 205, "B1"]] },
     n1b:   { c: "#2a78d6", d: "M1145,305 H1205 V332 H1263", m: "b", label: "B2", lx: 1180, ly: 300, cross: [[1205, 332, "B2"]] },
-    n2:    { c: "#eb6834", d: "M860,472 H884 V300 H901", m: "o", label: "F4 · UC metadata + down-scoped token · 443", lx: 700, ly: 462 },
-    f5:    { c: "#eb6834", dash: "6 4", d: "M860,525 H872 V405 H901", m: "o", label: "F5 · SCC relay 6666 (control channel)", lx: 700, ly: 545 },
-    f7:    { c: "#1baf7a", d: "M700,565 V690 H786", m: "a", label: "F7 · GCS read · vended UC RO SA · 443/PGA", lx: 700, ly: 660, cross: [[786, 700, "ingress"]] },
-    f8:    { c: "#1baf7a", d: "M740,565 V806 H786", m: "a", label: "F8 · analytics write · UC RW SA", lx: 620, ly: 690, cross: [[786, 806, "ingress"]] },
+    n2:    { c: "#eb6834", d: "M860,470 H884 V300 H901", m: "o", label: "F4 · UC metadata + token · 443", lx: 690, ly: 444 },
+    f5:    { c: "#eb6834", dash: "6 4", d: "M860,525 H872 V405 H901", m: "o", label: "F5 · SCC relay · 6666", lx: 690, ly: 592 },
+    f7:    { c: "#1baf7a", d: "M700,565 V700 H784", m: "a", label: "F7 · read (UC RO SA)", lx: 515, ly: 648, cross: [[786, 700, "ingress"]] },
+    f8:    { c: "#1baf7a", d: "M745,565 V806 H784", m: "a", label: "F8 · write (UC RW SA)", lx: 515, ly: 670, cross: [[786, 806, "ingress"]] },
     ret:   { c: "#2a78d6", dash: "5 4", d: "M901,320 H860 V472 H832", m: "b", label: "results → analyst (nothing data-bearing via control plane)", lx: 690, ly: 700 },
     // 2.4 read-only "verify settings" sub-animation (Account API, via the creator role)
     v_net:  { c: "#8a8880", dash: "5 4", d: "M1265,700 H1216 V332 H1149", m: "g", label: "verify · network / PSC (read-only)", lx: 1120, ly: 700 },
-    v_svc:  { c: "#8a8880", dash: "5 4", d: "M1265,758 H1210 V1006 H520 V1000", m: "g", label: "verify · service project (read-only)", lx: 800, ly: 1008 },
-    v_cmek: { c: "#8a8880", dash: "5 4", d: "M1265,772 H1200 V1030 H346 V905 H350", m: "g", label: "verify · CMEK (read-only)", lx: 470, ly: 1031 }
+    v_svc:  { c: "#8a8880", dash: "5 4", d: "M1265,758 H1210 V1044 H520 V1000", m: "g", label: "verify · service project (read-only)", lx: 800, ly: 1040 },
+    v_cmek: { c: "#8a8880", dash: "5 4", d: "M1265,772 H1200 V1066 H346 V905 H350", m: "g", label: "verify · CMEK (read-only)", lx: 470, ly: 1062 }
   };
 
   var launchStages = [
@@ -207,8 +207,8 @@
 
   var notebookStages = [
     { id: "N1", title: "N1 · Analyst submits a command", team: "data",
-      desc: "A notebook cell / SQL query goes from the analyst's browser over the frontend PSC wire (F1, B1→B2) to the workspace. Okta/OIDC auth happens on a back-channel, not on this wire.",
-      flows: ["n1", "n1b"], focus: ["admin", "frontendpsc", "plproxy", "controlplane"] },
+      desc: "A notebook cell / SQL query goes from the analyst's browser over the frontend PSC wire (F1, B1→B2) to the workspace — the cluster is already RUNNING. Okta/OIDC auth happens on a back-channel, not on this wire.",
+      flows: ["n1", "n1b"], reveal: ["drivervm", "execvm"], focus: ["admin", "frontendpsc", "plproxy", "controlplane"] },
     { id: "N2", title: "N2 · Driver gets context + a down-scoped token", team: "data",
       desc: "The running cluster calls the control plane over the frontend wire (F4) for UC metadata and a down-scoped storage token. The SCC relay (F5, TCP 6666) is the always-cluster-initiated control channel.",
       flows: ["n2", "f5"], focus: ["drivervm", "controlplane", "backendpsc"] },
@@ -284,8 +284,8 @@
     if (n.identity) txt(g, n.x + 12, n.y + n.h - 9, n.identity, { "font-size": 9.3, "font-weight": 600, fill: "#eb6834" });
     if (n.pill) {
       var pg = E("g", { class: "statepill" }, g);
-      var pr = E("rect", { x: n.x + n.w - 96, y: n.y + 8, width: 88, height: 17, rx: 8.5, fill: "#fff", stroke: "#c3c2b7" }, pg);
-      var pt = txt(pg, n.x + n.w - 52, n.y + 20, "", { "font-size": 9.5, "font-weight": 700, "text-anchor": "middle", fill: "#898781" });
+      var pr = E("rect", { x: n.x + n.w - 96, y: n.y + n.h - 25, width: 88, height: 17, rx: 8.5, fill: "#fff", stroke: "#c3c2b7" }, pg);
+      var pt = txt(pg, n.x + n.w - 52, n.y + n.h - 13, "", { "font-size": 9.5, "font-weight": 700, "text-anchor": "middle", fill: "#898781" });
       g._pill = { rect: pr, text: pt, node: n };
     }
     g.classList.add("clickable");
