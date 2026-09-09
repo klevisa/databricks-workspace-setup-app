@@ -42,12 +42,6 @@
     { id: "admin", step: "0", x: 40, y: 150, w: 230, h: 110, title: "Admin / Analyst",
       lines: ["Browser / REST API / CLI", "private route — no public front door"] },
 
-    // The workspace-creator SA (the identity) — lives customer-side; the two per-project
-    // creator roles below are granted to it. It's what Data Platform impersonates in 2.4.
-    { id: "creatorsa", step: "2.1", x: 40, y: 700, w: 230, h: 92, title: "Workspace-creator SA", accent: true,
-      lines: ["databricks_account_admin_sa", "customer GCP SA · registered as a", "Databricks account admin · used in 2.4"],
-      identity: "IDENTITY · holds both read-only roles →" },
-
     // Databricks-owned side
     { id: "wssa", step: "2.4", x: 1265, y: 180, w: 350, h: 95, title: "Workspace SA", accent: true,
       lines: ["db-<id>@prod-gcp-<region> · control-plane-owned", "the launcher — creates VMs across the boundary"],
@@ -69,9 +63,11 @@
     { id: "routernat", step: "2.2", x: 620, y: 235, w: 230, h: 110, title: "Cloud Router + NAT",
       optional: true, lines: ["outbound only · for public package", "installs · removable with mirrors"] },
 
-    // The host-project half of the creator grant (a separate per-project custom role).
-    { id: "crole_host", step: "2.2", x: 600, y: 348, w: 260, h: 70, title: "Workspace-creator role · host (RO)",
-      lines: ["read-only. Permissions: forwardingRules.get/list ·", "networks / subnetworks.get(+getIamPolicy) · projects ·", "roles.get · services.get/list"] },
+    // The host-project half of the creator grant (a separate per-project custom role),
+    // held by the same workspace-creator SA that lives in the service project.
+    { id: "crole_host", step: "2.2", x: 600, y: 348, w: 260, h: 74, title: "Workspace-creator role · host (RO)",
+      lines: ["RO: forwardingRules.get/list · networks/subnetworks.get,", "projects/roles/services.get/list (+getIamPolicy)"],
+      identity: "IDENTITY · held by the workspace-creator SA" },
     { id: "frontendpsc", step: "2.2", x: 905, y: 258, w: 240, h: 95, title: "Frontend PSC endpoint",
       lines: ["forwarding rule → reserved private IP", "carries Workspace UI / API · TLS 443"], pill: "psc" },
     { id: "backendpsc", step: "2.2", x: 905, y: 365, w: 240, h: 80, title: "Backend PSC endpoint",
@@ -92,12 +88,13 @@
       identity: "IDENTITY · runs as Compute SA / Cluster SA" },
 
     // Service project
-    // The service-project half of the creator grant (a per-project custom role).
-    { id: "crole_svc", step: "2.1", x: 350, y: 700, w: 370, h: 90, title: "Workspace-creator role · service (RO)",
-      lines: ["custom role · read-only. Permissions:",
-              "projects.get/getIamPolicy · serviceAccounts.get/getIamPolicy",
-              "roles.get · cryptoKeys.getIamPolicy · services.get/list"],
-      identity: "IDENTITY · held by the workspace-creator SA (left)" },
+    // The workspace-creator SA lives in the service project (bhavink convention),
+    // and holds a read-only custom role here. Its host-project role is a separate box.
+    { id: "crole_svc", step: "2.1", x: 350, y: 700, w: 370, h: 90, title: "Workspace-creator SA · lives here", accent: true,
+      lines: ["databricks_account_admin_sa · Databricks account admin (2.4)",
+              "service read role (RO): projects / serviceAccounts / roles.get,",
+              "cryptoKeys.getIamPolicy · services.get/list"],
+      identity: "IDENTITY · the workspace creator · + host read role (2.2)" },
     { id: "computesa", step: "2.8", x: 350, y: 796, w: 370, h: 82, title: "Compute SA (+ optional Cluster SA)",
       lines: ["databricks-compute@<svc-project> — GCE default", "the driver / executor VMs' runtime identity"],
       identity: "IDENTITY · not the launcher · minimal perms" },
@@ -126,10 +123,7 @@
   var edges = [
     { id: "e25", step: "2.5", d: "M1265,270 H1226 V1050 H430 V1000", label: "2.5 · project + resource roles → WS SA", lx: 690, ly: 1046 },
     { id: "e26", step: "2.6", d: "M1265,250 H1192 V600 H862", label: "2.6 · network role → WS SA", lx: 1015, ly: 592 },
-    { id: "e27", step: "2.7", d: "M1265,262 H1232 V1070 H344 V912 H350", label: "2.7 · CMEK MANAGED_SERVICES → WS SA", lx: 640, ly: 1066 },
-    // workspace-creator SA → the two per-project read-only roles it holds
-    { id: "ecrsvc", step: "2.1", d: "M270,745 H348", label: "granted 2.1", lx: 310, ly: 733 },
-    { id: "ecrhost", step: "2.2", d: "M270,730 V400 H598", label: "granted 2.2", lx: 445, ly: 392 }
+    { id: "e27", step: "2.7", d: "M1265,262 H1232 V1070 H344 V912 H350", label: "2.7 · CMEK MANAGED_SERVICES → WS SA", lx: 640, ly: 1066 }
   ];
 
   // PSC "wires": consumer endpoint → producer service attachment. Dashed/pending when
@@ -149,14 +143,14 @@
     { id: "2.1", label: "Create service project", short: "Service project", team: "foundation", repo: "service-project/",
       narrative: "Cloud Foundation creates the service project (the tenant for this one workspace), enables its APIs, attaches it to the existing Shared VPC host, and provisions the GCS/compute service agents. It also defines the read-only workspace-creator role and grants it to the creator SA on the service project.",
       privileges: ["resourcemanager.projectCreator", "billing.user", "compute.xpnAdmin", "resourcemanager.projectIamAdmin", "serviceusage.serviceUsageAdmin", "iam.roleAdmin"],
-      creates: ["service", "creatorsa", "crole_svc"], edges: ["ecrsvc"],
-      creatLabel: ["Service project", "Workspace-creator SA (the identity)", "Creator role — service, read-only → the SA"] },
+      creates: ["service", "crole_svc"],
+      creatLabel: ["Service project", "Workspace-creator SA + its read-only service role"] },
 
     { id: "2.2", label: "Create network", short: "Network", team: "network", repo: "network/",
       narrative: "Network Engineering builds the private landing zone inside the host project: VPC + node subnet (NPIP, PGA on) + PSC subnet, firewall, Cloud Router/NAT, the private DNS zone (zone only — records come in 2.6), and the two PSC endpoints, which come up PENDING. It also grants the read-only creator role on the host project.",
       privileges: ["compute.networkAdmin", "compute.securityAdmin", "dns.admin", "iam.roleAdmin"],
-      creates: ["dnszone", "routernat", "pscsubnet", "frontendpsc", "backendpsc", "nodesubnet", "firewall", "crole_host"], edges: ["ecrhost"],
-      creatLabel: ["VPC + node/PSC subnets", "Cloud Router + NAT (optional)", "Private DNS zone (no records yet)", "Frontend + Backend PSC endpoints (PENDING)", "Creator role — host, read-only → the SA"] },
+      creates: ["dnszone", "routernat", "pscsubnet", "frontendpsc", "backendpsc", "nodesubnet", "firewall", "crole_host"],
+      creatLabel: ["VPC + node/PSC subnets", "Cloud Router + NAT (optional)", "Private DNS zone (no records yet)", "Frontend + Backend PSC endpoints (PENDING)", "Creator role — host, read-only (held by the SA)"] },
 
     { id: "2.3", label: "CMEK key", short: "CMEK", team: "security", repo: "cmek/",
       narrative: "Cloud Security creates the CMEK keyring + key in the service project and grants encrypt/decrypt to the service project's Google-managed compute-system and gs-project-accounts agents — the STORAGE use case only. The MANAGED_SERVICES grant to the Workspace SA waits for 2.7.",
@@ -247,7 +241,7 @@
 
   /* ================= rendering ================= */
   var svg = document.getElementById("canvas");
-  var elByNode = {}, elByContainer = {}, elByEdge = {}, elByFlow = {}, elByWire = {};
+  var elByNode = {}, elByContainer = {}, elByEdge = {}, elByFlow = {}, elByWire = {}, BASE = {};
 
   function E(tag, attrs, parent) {
     var el = document.createElementNS(SVGNS, tag);
@@ -269,7 +263,8 @@
   }
 
   function drawContainer(c) {
-    var g = E("g", { class: "node container", "data-step": c.step }, layC);
+    var g = E("g", { class: "node container", "data-step": c.step, "data-id": c.id }, layC);
+    BASE[c.id] = { x: c.x, y: c.y, w: c.w, h: c.h };
     var isPeri = c.cls === "perimeter", isSub = c.cls === "subframe";
     E("rect", {
       class: "box", x: c.x, y: c.y, width: c.w, height: c.h, rx: 12,
@@ -284,6 +279,7 @@
 
   function drawNode(n) {
     var g = E("g", { class: "node", "data-step": n.step, "data-id": n.id }, layN);
+    BASE[n.id] = { x: n.x, y: n.y, w: n.w, h: n.h };
     if (n.textOnly) {
       (n.lines || []).forEach(function (ln, i) {
         txt(g, n.x, n.y + i * fs(14), ln, { "font-size": fs(10.5), fill: "#52514e" });
@@ -690,6 +686,43 @@
   document.getElementById("zoomIn").addEventListener("click", function () { zoomBy(1.3); });
   document.getElementById("zoomOut").addEventListener("click", function () { zoomBy(1 / 1.3); });
   document.getElementById("zoomFit").addEventListener("click", fitVB);
+
+  /* ---------- hidden edit mode: ?edit=1 → drag boxes, then window.getLayout() ---------- */
+  var EDIT = /(?:^|[?&])edit(?:=1)?(?:&|$)/.test(location.search);
+  var layoutDelta = {};
+  window.getLayout = function () {
+    var o = {};
+    for (var id in layoutDelta) { var d = layoutDelta[id]; if ((d.x || d.y) && BASE[id]) o[id] = { x: BASE[id].x + d.x, y: BASE[id].y + d.y }; }
+    return o;
+  };
+  if (EDIT) {
+    document.body.classList.add("editmode");
+    var bar = document.createElement("div");
+    bar.className = "editbar";
+    bar.innerHTML = 'EDIT MODE · drag any box <button id="copyLayout" type="button">Copy layout</button>';
+    document.querySelector(".canvas-wrap").appendChild(bar);
+    document.getElementById("copyLayout").addEventListener("click", function () {
+      var s = JSON.stringify(window.getLayout(), null, 2);
+      try { navigator.clipboard.writeText(s); } catch (e) {}
+      window.prompt("Layout (also on clipboard). Paste this back:", s);
+    });
+    var dg = null, did = null, dstart = null, dbase = null;
+    svg.addEventListener("mousedown", function (e) {
+      var g = e.target.closest && e.target.closest("g.node");
+      if (!g) return;
+      did = g.getAttribute("data-id"); if (!did) return;
+      dg = g; dstart = toSvg(e.clientX, e.clientY);
+      var d = layoutDelta[did] || { x: 0, y: 0 }; dbase = { x: d.x, y: d.y };
+      e.stopPropagation(); e.preventDefault();
+    }, true);
+    window.addEventListener("mousemove", function (e) {
+      if (!dg) return;
+      var p = toSvg(e.clientX, e.clientY);
+      layoutDelta[did] = { x: Math.round(dbase.x + (p.x - dstart.x)), y: Math.round(dbase.y + (p.y - dstart.y)) };
+      dg.setAttribute("transform", "translate(" + layoutDelta[did].x + "," + layoutDelta[did].y + ")");
+    });
+    window.addEventListener("mouseup", function () { dg = null; did = null; });
+  }
 
   setTab("deploy");
 })();
