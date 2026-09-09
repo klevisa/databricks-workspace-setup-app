@@ -3,33 +3,56 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Databricks Workspace Setup App</title>
+  <title>Databricks on GCP — Interactive Setup Walkthrough</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <main class="app">
-    <header>
-      <h1>Databricks Workspace Setup</h1>
-      <p class="tagline">Client-side scaffold — start building here.</p>
-    </header>
+  <header class="topbar">
+    <div class="topbar-main">
+      <h1>Databricks on GCP — Interactive Walkthrough</h1>
+      <p class="sub">Least-privilege workspace on a Shared VPC (PSC + CMEK). Step through the build, then watch a cluster launch and a notebook command run — over the same trust-zone map.</p>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Views">
+      <button class="tab" role="tab" data-tab="deploy" aria-selected="true">1 · Deployment</button>
+      <button class="tab" role="tab" data-tab="launch" aria-selected="false">2 · Cluster launch</button>
+      <button class="tab" role="tab" data-tab="notebook" aria-selected="false">3 · Notebook command</button>
+    </nav>
+  </header>
 
-    <section class="card">
-      <p>
-        This is a placeholder page served as a static site (HTML + JS only).
-        Replace the contents of <code>index.html</code>, <code>app.js</code>, and
-        <code>style.css</code> with your app.
-      </p>
-      <p>
-        Everything runs in the browser: no server, no build step, no secrets.
-      </p>
-      <button id="ping" type="button">Ping</button>
-      <p id="status" class="status" aria-live="polite"></p>
+  <main class="layout">
+    <!-- Left: steps / stages -->
+    <aside class="rail" aria-label="Steps">
+      <div class="rail-head">
+        <span id="railTitle">Deployment steps</span>
+      </div>
+      <ol id="stepList" class="steps"></ol>
+      <div class="rail-controls">
+        <button id="prevBtn" class="ctrl" title="Previous">‹ Prev</button>
+        <button id="playBtn" class="ctrl primary" title="Play">▶ Play</button>
+        <button id="nextBtn" class="ctrl" title="Next">Next ›</button>
+        <button id="resetBtn" class="ctrl" title="Reset">↺</button>
+      </div>
+    </aside>
+
+    <!-- Center: diagram -->
+    <section class="stage" aria-label="Diagram">
+      <div class="legend" id="legend"></div>
+      <div class="canvas-wrap">
+        <svg id="canvas" viewBox="0 0 1680 1160" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Trust-zone topology"></svg>
+      </div>
     </section>
 
-    <footer>
-      <span id="loaded"></span>
-    </footer>
+    <!-- Right: detail -->
+    <aside class="panel" aria-label="Step detail">
+      <div id="panelBody">
+        <p class="muted">Select a step to begin.</p>
+      </div>
+    </aside>
   </main>
+
+  <footer class="foot">
+    <span>Built from the <a href="https://github.com/klevisa/shared-vpc-cmk-psc-databricks-deployment" target="_blank" rel="noopener">shared-vpc-cmk-psc-databricks-deployment</a> playbook · <a href="https://docs.databricks.com/gcp/en/admin/workspace/create-least-privilege-workspace" target="_blank" rel="noopener">Databricks LPW docs</a>. Topology, launch &amp; runtime views adapted from the v2 architecture diagrams.</span>
+  </footer>
 
   <script src="app.js"></script>
 </body>
