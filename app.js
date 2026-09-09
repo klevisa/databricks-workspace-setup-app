@@ -93,11 +93,9 @@
 
     // Mail data projects (existing context)
     { id: "datalake", step: "0", x: 790, y: 705, w: 370, h: 82, title: "GCS — data-lake bucket(s) · read-only",
-      lines: ["Yahoo Mail data", "grant: objectViewer + legacyBucketReader"],
-      identity: "IDENTITY · vended UC storage-credential SA (RO)" },
+      lines: ["Yahoo Mail data"] },
     { id: "analytics", step: "0", x: 790, y: 797, w: 370, h: 82, title: "GCS — analytics bucket (PoC) · read-write",
-      lines: ["benchmark outputs"],
-      identity: "IDENTITY · vended UC storage-credential SA (RW)" },
+      lines: ["benchmark outputs"] },
     { id: "bigquery", step: "0", x: 790, y: 889, w: 370, h: 60, title: "BigQuery",
       lines: ["Yahoo Mail datasets"] },
 
