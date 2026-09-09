@@ -713,18 +713,21 @@
     document.body.classList.add("editmode");
     var layEdit = E("g", { id: "layEdit" }, svg);   // outline + handles, on top of all
 
-    // ---- edit UI: one compact toolbar docked across the very top ----
-    var bar = document.createElement("div");
-    bar.className = "edittools";
-    bar.innerHTML =
-      '<span class="et-hint" id="epTitle">EDIT · click a box</span>' +
-      '<textarea id="epText" rows="2" spellcheck="false" placeholder="first line = title · rest = body" hidden></textarea>' +
-      '<label class="et-dim" hidden>W <input id="epW" type="number" step="1"></label>' +
-      '<label class="et-dim" hidden>H <input id="epH" type="number" step="1"></label>' +
-      '<button id="epReset" type="button" hidden>Reset</button>' +
+    // ---- edit UI: dialog docked in the header, to the left of the tabs ----
+    var panel = document.createElement("div");
+    panel.className = "editpanel";
+    panel.innerHTML =
+      '<h4 id="epTitle">EDIT · click a box</h4>' +
+      '<textarea id="epText" rows="5" spellcheck="false" placeholder="first line = title · remaining lines = body" hidden></textarea>' +
+      '<div class="dims" hidden>' +
+      '<label>W <input id="epW" type="number" step="1"></label>' +
+      '<label>H <input id="epH" type="number" step="1"></label>' +
+      '<button id="epReset" type="button">Reset box</button>' +
+      '</div>' +
       '<button id="copyLayout" type="button">Copy layout</button>';
-    document.querySelector(".canvas-wrap").appendChild(bar);
-    var editFields = [].slice.call(bar.querySelectorAll("#epText, .et-dim, #epReset"));
+    var topbar = document.querySelector(".topbar");
+    topbar.insertBefore(panel, topbar.querySelector(".tabs"));
+    var editFields = [].slice.call(panel.querySelectorAll("#epText, .dims"));
     function showFields(on) { editFields.forEach(function (el) { el.hidden = !on; }); }
 
     document.getElementById("copyLayout").addEventListener("click", function () {
