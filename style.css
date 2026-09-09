@@ -1,0 +1,87 @@
+:root {
+  --bg: #f6f7f9;
+  --fg: #1b1f23;
+  --muted: #6a737d;
+  --card: #ffffff;
+  --border: #e1e4e8;
+  --accent: #ff3621; /* Databricks red */
+  --accent-fg: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --fg: #e6edf3;
+    --muted: #8b949e;
+    --card: #161b22;
+    --border: #30363d;
+    --accent: #ff5c47;
+    --accent-fg: #14161a;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.5;
+}
+
+.app {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 3rem 1.25rem;
+}
+
+header h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.6rem;
+}
+
+.tagline {
+  margin: 0 0 2rem;
+  color: var(--muted);
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.5rem;
+}
+
+code {
+  background: rgba(127, 127, 127, 0.15);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+button {
+  appearance: none;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.5rem 1.1rem;
+  cursor: pointer;
+}
+
+button:hover { filter: brightness(1.05); }
+
+.status {
+  min-height: 1.5rem;
+  margin: 0.75rem 0 0;
+  color: var(--muted);
+}
+
+footer {
+  margin-top: 2rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
