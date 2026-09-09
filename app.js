@@ -626,5 +626,42 @@
     else if (e.key === "ArrowLeft") { stopPlay(); goto(idx - 1); }
   });
 
+  /* ---------- zoom / pan ---------- */
+  var baseVB = (function () { var a = svg.getAttribute("viewBox").split(/\s+/).map(Number); return { x: a[0], y: a[1], w: a[2], h: a[3] }; })();
+  var vb = { x: baseVB.x, y: baseVB.y, w: baseVB.w, h: baseVB.h };
+  var MINW = baseVB.w * 0.30; // max zoom-in ~3.3x
+  function applyVB() { svg.setAttribute("viewBox", vb.x + " " + vb.y + " " + vb.w + " " + vb.h); }
+  function clampVB() {
+    if (vb.w >= baseVB.w) vb.x = baseVB.x + (baseVB.w - vb.w) / 2;
+    else vb.x = Math.max(baseVB.x, Math.min(vb.x, baseVB.x + baseVB.w - vb.w));
+    if (vb.h >= baseVB.h) vb.y = baseVB.y + (baseVB.h - vb.h) / 2;
+    else vb.y = Math.max(baseVB.y, Math.min(vb.y, baseVB.y + baseVB.h - vb.h));
+  }
+  function toSvg(cx, cy) { var p = svg.createSVGPoint(); p.x = cx; p.y = cy; return p.matrixTransform(svg.getScreenCTM().inverse()); }
+  function zoomBy(factor, cx, cy) {
+    var nw = Math.max(MINW, Math.min(baseVB.w, vb.w / factor));
+    var scale = nw / vb.w, nh = vb.h * scale;
+    if (cx == null) { cx = vb.x + vb.w / 2; cy = vb.y + vb.h / 2; }
+    vb.x = cx - (cx - vb.x) * scale; vb.y = cy - (cy - vb.y) * scale;
+    vb.w = nw; vb.h = nh; clampVB(); applyVB();
+  }
+  function fitVB() { vb = { x: baseVB.x, y: baseVB.y, w: baseVB.w, h: baseVB.h }; applyVB(); }
+  svg.addEventListener("wheel", function (e) { e.preventDefault(); var p = toSvg(e.clientX, e.clientY); zoomBy(e.deltaY < 0 ? 1.15 : 1 / 1.15, p.x, p.y); }, { passive: false });
+  var panning = false, moved = false, last = null;
+  svg.addEventListener("mousedown", function (e) { panning = true; moved = false; last = { x: e.clientX, y: e.clientY }; });
+  window.addEventListener("mousemove", function (e) {
+    if (!panning) return;
+    var ctm = svg.getScreenCTM(); if (!ctm) return;
+    var dx = (e.clientX - last.x) / ctm.a, dy = (e.clientY - last.y) / ctm.d;
+    if (Math.abs(e.clientX - last.x) + Math.abs(e.clientY - last.y) > 2) moved = true;
+    vb.x -= dx; vb.y -= dy; clampVB(); applyVB(); last = { x: e.clientX, y: e.clientY };
+  });
+  window.addEventListener("mouseup", function () { panning = false; });
+  // suppress node-click selection if the mouse was dragging (pan)
+  svg.addEventListener("click", function (e) { if (moved) { e.stopPropagation(); moved = false; } }, true);
+  document.getElementById("zoomIn").addEventListener("click", function () { zoomBy(1.3); });
+  document.getElementById("zoomOut").addEventListener("click", function () { zoomBy(1 / 1.3); });
+  document.getElementById("zoomFit").addEventListener("click", fitVB);
+
   setTab("deploy");
 })();
