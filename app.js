@@ -54,7 +54,11 @@
     { id: "dnszone", step: "2.2", x: 350, y: 235, w: 250, h: 155, title: "Private DNS zone",
       lines: ["gcp.databricks.com", "resolves workspace hostnames to", "the private PSC endpoint IPs"], pill: "dns" },
     { id: "routernat", step: "2.2", x: 620, y: 235, w: 230, h: 110, title: "Cloud Router + NAT",
-      lines: ["outbound only · optional", "for public package installs"] },
+      optional: true, lines: ["outbound only · for public package", "installs · removable with mirrors"] },
+
+    // creator-role grants (read-only) — shown as badges on the project frames
+    { id: "crSvc", step: "2.1", x: 545, y: 657, w: 195, h: 18, badge: true, title: "creator role (RO) → creator SA" },
+    { id: "crHost", step: "2.2", x: 995, y: 182, w: 185, h: 18, badge: true, title: "creator role (RO) → creator SA" },
     { id: "frontendpsc", step: "2.2", x: 905, y: 258, w: 240, h: 95, title: "Frontend PSC endpoint",
       lines: ["fwd-rule + internal IP", "workspace UI / REST · TLS 443"], pill: "psc" },
     { id: "backendpsc", step: "2.2", x: 905, y: 365, w: 240, h: 80, title: "Backend PSC endpoint",
@@ -96,10 +100,19 @@
   ];
 
   /* ---------------- persistent deployment "grant" edges ---------------- */
+  // grant edges from the Workspace SA into the perimeter. Routed via the right gap +
+  // bottom corridor so they never cross the Yahoo Mail data projects frame.
   var edges = [
-    { id: "e25", step: "2.5", d: "M1265,235 H1205 V690 H742", label: "2.5 · project + resource roles", lx: 980, ly: 682 },
-    { id: "e26", step: "2.6", d: "M1265,250 H1190 V600 H862", label: "2.6 · network role", lx: 1010, ly: 592 },
-    { id: "e27", step: "2.7", d: "M1265,265 H1175 V865 H722", label: "2.7 · CMEK (MANAGED_SERVICES)", lx: 940, ly: 858 }
+    { id: "e25", step: "2.5", d: "M1265,270 H1226 V1014 H430 V1000", label: "2.5 · project + resource roles", lx: 700, ly: 1013 },
+    { id: "e26", step: "2.6", d: "M1265,250 H1192 V600 H862", label: "2.6 · network role", lx: 1015, ly: 592 },
+    { id: "e27", step: "2.7", d: "M1265,262 H1232 V1034 H344 V867 H350", label: "2.7 · CMEK (MANAGED_SERVICES)", lx: 585, ly: 1035 }
+  ];
+
+  // PSC "wires": consumer endpoint → producer service attachment. Dashed/pending when
+  // the endpoints are first created (2.2); solid once registered → ACCEPTED (2.4).
+  var pscWires = [
+    { id: "wf", d: "M1145,305 H1205 V332 H1263" },
+    { id: "wb", d: "M1145,405 H1205 V432 H1263" }
   ];
 
   /* ---------------- deployment steps ---------------- */
@@ -112,13 +125,13 @@
     { id: "2.1", label: "Create service project", short: "Service project", team: "foundation", repo: "service-project/",
       narrative: "Cloud Foundation creates the service project (the tenant for this one workspace), enables its APIs, attaches it to the existing Shared VPC host, and provisions the GCS/compute service agents. It also defines the read-only workspace-creator role and grants it to the creator SA on the service project.",
       privileges: ["resourcemanager.projectCreator", "billing.user", "compute.xpnAdmin", "resourcemanager.projectIamAdmin", "serviceusage.serviceUsageAdmin", "iam.roleAdmin"],
-      creates: ["service"], creatLabel: ["Service project (empty)", "Creator role — service (read-only)"] },
+      creates: ["service", "crSvc"], creatLabel: ["Service project (empty)", "Creator role — service (read-only) → creator SA"] },
 
     { id: "2.2", label: "Create network", short: "Network", team: "network", repo: "network/",
       narrative: "Network Engineering builds the private landing zone inside the host project: VPC + node subnet (NPIP, PGA on) + PSC subnet, firewall, Cloud Router/NAT, the private DNS zone (zone only — records come in 2.6), and the two PSC endpoints, which come up PENDING. It also grants the read-only creator role on the host project.",
       privileges: ["compute.networkAdmin", "compute.securityAdmin", "dns.admin", "iam.roleAdmin"],
-      creates: ["dnszone", "routernat", "pscsubnet", "frontendpsc", "backendpsc", "nodesubnet", "firewall"],
-      creatLabel: ["VPC + node/PSC subnets", "Cloud Router + NAT", "Private DNS zone (no records yet)", "Frontend + Backend PSC endpoints (PENDING)", "Creator role — host (read-only)"] },
+      creates: ["dnszone", "routernat", "pscsubnet", "frontendpsc", "backendpsc", "nodesubnet", "firewall", "crHost"],
+      creatLabel: ["VPC + node/PSC subnets", "Cloud Router + NAT (optional)", "Private DNS zone (no records yet)", "Frontend + Backend PSC endpoints (PENDING)", "Creator role — host (read-only) → creator SA"] },
 
     { id: "2.3", label: "CMEK key", short: "CMEK", team: "security", repo: "cmek/",
       narrative: "Cloud Security creates the CMEK keyring + key in the service project and grants encrypt/decrypt to the service project's Google-managed compute-system and gs-project-accounts agents — the STORAGE use case only. The MANAGED_SERVICES grant to the Workspace SA waits for 2.7.",
@@ -129,7 +142,9 @@
       narrative: "Data Platform, as the account admin, registers the CMEK key, the two PSC endpoints (which flips them PENDING → ACCEPTED), the private access settings, and the network config — then creates the workspace paused in PROVISIONING. Databricks mints and returns the Workspace SA without building any GCS/GCE yet.",
       privileges: ["Databricks account admin", "read-only creator roles (2.1 + 2.2)"],
       creates: ["wssa"], creatLabel: ["Workspace SA (minted, returned)", "PSC endpoints → ACCEPTED", "Private access settings · network config"],
-      states: { frontendpsc: "ACCEPTED", backendpsc: "ACCEPTED", wssa: "workspace: PROVISIONING" } },
+      states: { frontendpsc: "ACCEPTED", backendpsc: "ACCEPTED", wssa: "workspace: PROVISIONING" },
+      flows: ["v_net", "v_svc", "v_cmek"], pulse: ["service", "frontendpsc", "backendpsc", "kms"],
+      substep: "Sub-step: using the read-only creator roles from 2.1/2.2, the Account API first reaches into the service project, the host network/PSC, and the CMEK key to validate settings — read-only — before it creates anything." },
 
     { id: "2.5", label: "Workspace-SA operator roles", short: "Operator roles", team: "iam", repo: "workspace-sa-roles/",
       narrative: "Cloud IAM defines and grants the Project role and the workspace-scoped Resource role to the Workspace SA on the service project. The Resource role carries storage.buckets.create / compute.instances.create — the permissions that let the SA build the workspace's storage and VMs — scoped by an IAM condition to this workspace's resources.",
@@ -171,7 +186,11 @@
     f5:    { c: "#eb6834", dash: "6 4", d: "M860,525 H872 V405 H901", m: "o", label: "F5 · SCC relay 6666 (control channel)", lx: 700, ly: 545 },
     f7:    { c: "#1baf7a", d: "M700,565 V690 H786", m: "a", label: "F7 · GCS read · vended UC RO SA · 443/PGA", lx: 700, ly: 660, cross: [[786, 700, "ingress"]] },
     f8:    { c: "#1baf7a", d: "M740,565 V806 H786", m: "a", label: "F8 · analytics write · UC RW SA", lx: 620, ly: 690, cross: [[786, 806, "ingress"]] },
-    ret:   { c: "#2a78d6", dash: "5 4", d: "M901,320 H860 V472 H832", m: "b", label: "results → analyst (nothing data-bearing via control plane)", lx: 690, ly: 700 }
+    ret:   { c: "#2a78d6", dash: "5 4", d: "M901,320 H860 V472 H832", m: "b", label: "results → analyst (nothing data-bearing via control plane)", lx: 690, ly: 700 },
+    // 2.4 read-only "verify settings" sub-animation (Account API, via the creator role)
+    v_net:  { c: "#8a8880", dash: "5 4", d: "M1265,700 H1216 V332 H1149", m: "g", label: "verify · network / PSC (read-only)", lx: 1120, ly: 700 },
+    v_svc:  { c: "#8a8880", dash: "5 4", d: "M1265,758 H1210 V1006 H520 V1000", m: "g", label: "verify · service project (read-only)", lx: 800, ly: 1008 },
+    v_cmek: { c: "#8a8880", dash: "5 4", d: "M1265,772 H1200 V1030 H346 V905 H350", m: "g", label: "verify · CMEK (read-only)", lx: 470, ly: 1031 }
   };
 
   var launchStages = [
@@ -203,7 +222,7 @@
 
   /* ================= rendering ================= */
   var svg = document.getElementById("canvas");
-  var elByNode = {}, elByContainer = {}, elByEdge = {}, elByFlow = {};
+  var elByNode = {}, elByContainer = {}, elByEdge = {}, elByFlow = {}, elByWire = {};
 
   function E(tag, attrs, parent) {
     var el = document.createElementNS(SVGNS, tag);
@@ -244,8 +263,20 @@
       txt(g, n.x, n.y, n.lines[0], { "font-size": 10.5, fill: "#52514e" });
       elByNode[n.id] = g; return;
     }
+    if (n.badge) {
+      E("rect", { class: "box", x: n.x, y: n.y, width: n.w, height: n.h, rx: n.h / 2, fill: "#fff4ef", stroke: "#eb6834", "stroke-width": 1.2 }, g);
+      txt(g, n.x + n.w / 2, n.y + 13, n.title, { "font-size": 9.5, "font-weight": 700, "text-anchor": "middle", fill: "#b3421f" });
+      elByNode[n.id] = g; return;
+    }
     E("rect", { class: "box", x: n.x, y: n.y, width: n.w, height: n.h, rx: 8,
-      fill: "#ffffff", stroke: n.accent ? "#eb6834" : "#e1e0d9", "stroke-width": n.accent ? 1.5 : 1 }, g);
+      fill: "#ffffff", stroke: n.optional ? "#b98b00" : (n.accent ? "#eb6834" : "#e1e0d9"),
+      "stroke-width": (n.optional || n.accent) ? 1.5 : 1,
+      "stroke-dasharray": n.optional ? "6 4" : "0" }, g);
+    if (n.optional) {
+      var ow = 66;
+      E("rect", { x: n.x + n.w - ow - 8, y: n.y + 7, width: ow, height: 16, rx: 8, fill: "#fff7e6", stroke: "#e0b25a" }, g);
+      txt(g, n.x + n.w - ow / 2 - 8, n.y + 19, "OPTIONAL", { "font-size": 9, "font-weight": 700, "text-anchor": "middle", fill: "#a86300" });
+    }
     txt(g, n.x + 12, n.y + 22, n.title, { "font-size": 12.5, "font-weight": 600, fill: "#0b0b0b" });
     (n.lines || []).forEach(function (ln, i) {
       txt(g, n.x + 12, n.y + 40 + i * 14.5, ln, { "font-size": 10.3, fill: "#52514e" });
@@ -292,16 +323,35 @@
     return elByFlow[id];
   }
 
+  function drawWire(w) {
+    var g = E("g", { class: "flowg", "data-wire": w.id }, layW);
+    var p = E("path", { class: "flow", d: w.d, fill: "none", "marker-end": "url(#arr-a)" }, g);
+    elByWire[w.id] = { g: g, path: p };
+  }
+  function updateWires(maxIdx) {
+    var on = maxIdx >= oi("2.2"), accepted = maxIdx >= oi("2.4");
+    pscWires.forEach(function (w) {
+      var e = elByWire[w.id]; if (!e) return;
+      toggle(e.g, on);
+      e.path.setAttribute("stroke", accepted ? "#1baf7a" : "#c3c2b7");
+      e.path.setAttribute("stroke-width", accepted ? 2.2 : 1.6);
+      e.path.setAttribute("stroke-dasharray", accepted ? "0" : "6 5");
+      e.path.setAttribute("marker-end", accepted ? "url(#arr-a)" : "url(#arr-g)");
+    });
+  }
+
   // layers
-  var layC, layE, layN, layF;
+  var layC, layE, layW, layN, layF;
   function renderAll() {
     buildDefs();
     E("rect", { x: 0, y: 0, width: 1680, height: 1160, fill: "#fcfcfb" }, svg);
     layC = E("g", { id: "layC" }, svg);
     layE = E("g", { id: "layE" }, svg);
+    layW = E("g", { id: "layW" }, svg);
     layN = E("g", { id: "layN" }, svg);
     layF = E("g", { id: "layF" }, svg);
     containers.forEach(drawContainer);
+    pscWires.forEach(drawWire);
     nodes.forEach(drawNode);
     edges.forEach(drawEdge);
   }
@@ -357,6 +407,7 @@
       toggle(elByNode[n.id], vis);
     });
     edges.forEach(function (e) { toggle(elByEdge[e.id], oi(e.step) <= maxIdx); });
+    updateWires(maxIdx);
   }
 
   function toggle(g, on, appear) {
@@ -370,6 +421,7 @@
   }
   function clearFocus() {
     nodes.forEach(function (n) { if (elByNode[n.id]) elByNode[n.id].classList.remove("dim", "selected", "pulsing"); });
+    containers.forEach(function (c) { if (elByContainer[c.id]) elByContainer[c.id].classList.remove("dim", "selected"); });
   }
 
   function animateFlow(id, delay) {
@@ -424,6 +476,7 @@
       s.creatLabel.forEach(function (r) { h += '<span class="tag res">' + r + '</span>'; });
       h += '</div>';
     }
+    if (s.substep) h += '<p class="note" style="border-color:#c3c2b7">' + s.substep + '</p>';
     if (s.repo) h += '<p class="note">Repo config: <code>' + s.repo + '</code></p>';
     if (s.note) h += '<p class="note">' + s.note + '</p>';
     p.innerHTML = h;
@@ -457,6 +510,10 @@
     var s = steps[idx];
     (s.creates || []).forEach(function (id) { toggle(elByNode[id] || elByContainer[id], true, true); });
     (s.edges || []).forEach(function (id) { toggle(elByEdge[id], true, true); });
+    // pulse the components this step touches / validates
+    (s.pulse || []).forEach(function (id) { var g = elByNode[id] || elByContainer[id]; if (g) g.classList.add("selected"); });
+    // step-scoped action flows (e.g. 2.4 read-only verify) — animated, cleared on step change
+    if (s.flows) { var d = 0; s.flows.forEach(function (fid) { animateFlow(fid, 90 + d); d += 220; }); }
     renderRail(steps, idx, "deploy");
     panelDeploy(s);
     updateControls(steps.length);
