@@ -51,7 +51,7 @@ body {
 /* ---------- layout ---------- */
 .layout {
   flex: 1; display: grid;
-  grid-template-columns: 300px minmax(0,1fr) 340px;
+  grid-template-columns: 258px minmax(0,1fr) 300px;
   gap: 0; min-height: 0;
 }
 .rail, .panel { background: var(--card); overflow-y: auto; }
@@ -80,8 +80,9 @@ body {
 }
 .step-item.active .step-badge { border-color: var(--accent); color: var(--accent); }
 .step-meta { min-width: 0; }
-.step-name { font-size: .82rem; font-weight: 600; line-height: 1.25; }
-.step-team { font-size: .7rem; color: var(--faint); margin-top: .1rem; }
+.step-meta { display: flex; flex-direction: column; }
+.step-name { display: block; font-size: .82rem; font-weight: 600; line-height: 1.25; }
+.step-team { display: block; font-size: .7rem; color: var(--faint); margin-top: .12rem; }
 
 .rail-controls {
   position: sticky; bottom: 0; display: flex; gap: .4rem;
