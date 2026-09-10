@@ -430,10 +430,9 @@
     l2wssa: { c: "#eb6834", dash: "6 4", d: "M1265,250 H1225 V515 H1210", m: "o", label: "" },
     l2csa:  { c: "#eb6834", dash: "6 4", d: "M350,727 H316 V568 H585 V538", m: "o", vertical: true, label: "Workspace SA assigns Compute SA as VM identity", lx: 316, ly: 648 },
     l2cmek: { c: "#eb6834", dash: "6 4", d: "M720,994 H740 V568 H615 V538", m: "o", vertical: true, label: "disks come up CMEK encrypted", lx: 740, ly: 781 },
-    boot:   { c: "#eb6834", dash: "6 4", d: "M480,560 V540", m: "o", label: "boot Runtime + Photon", lx: 545, ly: 556 },
     tunnel:{ c: "#c3c2b7", dash: "4 3", d: "M450,420 V393", m: "g", label: "resolve tunnel.<region>", lx: 462, ly: 410 },
     l3:    { c: "#eb6834", d: "M860,505 H882 V405 H901", m: "o", label: "L3 · 6666", lx: 874, ly: 470 },
-    b3:    { c: "#eb6834", d: "M1145,405 H1205 V432 H1263", m: "o", label: "B3", lx: 1180, ly: 400, cross: [[1205, 405, "B3"]] },
+    b3:    { c: "#eb6834", d: "M1145,405 H1205 V432 H1263", m: "o", label: "" },
     // notebook runtime
     n1:    { c: "#2a78d6", d: "M270,180 H872 V305 H901", m: "b", label: "F1 · notebook command · TLS 443", lx: 571, ly: 180, cross: [[300, 180, "B1"]] },
     n1b:   { c: "#2a78d6", d: "M1145,305 H1205 V332 H1263", m: "b", label: "", lx: 1180, ly: 300 },
@@ -454,9 +453,9 @@
       flows: ["l1a", "l1b"], focus: ["admin", "frontendpsc", "plproxy", "controlplane"] },
     { id: "L2", title: "L2 · Cluster manager launches VMs", team: "data",
       desc: "Acting AS the Workspace SA (control-plane-owned launcher), the cluster manager calls the GCE API to create driver + executor VMs in the service project with CMEK-encrypted disks. It assigns the Compute SA as the VMs' identity — the VMs boot as the Compute SA, never the Workspace SA. The launch crosses the perimeter through the VPC-SC ingress rule created at 2.8 (Workspace SA, from the regional control plane).",
-      flows: ["l2", "l2wssa", "l2csa", "l2cmek", "boot"], ingress: ["ing_launch"], reveal: ["drivervm", "execvm"], focus: ["controlplane", "computesa", "drivervm", "execvm", "kms"] },
+      flows: ["l2", "l2wssa", "l2csa", "l2cmek"], ingress: ["ing_launch"], reveal: ["drivervm", "execvm"], focus: ["controlplane", "computesa", "drivervm", "execvm", "kms", "wssa"] },
     { id: "L3", title: "L3 · Cluster dials home (SCC relay)", team: "data",
-      desc: "The VMs resolve tunnel.<region> in the private DNS zone, open TCP 6666 outbound to the backend endpoint → ngrok attachment (B3). The cluster registers and reaches RUNNING. No inbound path to the cluster exists.",
+      desc: "The VMs resolve tunnel.<region> in the private DNS zone, open TCP 6666 outbound to the backend endpoint → ngrok attachment. The cluster registers and reaches RUNNING. No inbound path to the cluster exists.",
       flows: ["tunnel", "l3", "b3"], focus: ["drivervm", "backendpsc", "ngrok"], run: "RUNNING" }
   ];
 
