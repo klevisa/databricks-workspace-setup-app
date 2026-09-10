@@ -270,7 +270,7 @@
         what: "Existing Yahoo Mail BigQuery datasets, queried through the governed data path." } },
 
     // Public internet
-    { id: "pkgrepos", step: "0", x: 1265, y: 987, w: 350, h: 70, title: "Package repos",
+    { id: "pkgrepos", step: "0", x: 1265, y: 1005, w: 350, h: 68, title: "Package repos",
       lines: ["PyPI · Maven · npm"],
       detail: {
         what: "Public package registries for library installs, reachable outbound via Cloud NAT. Optional if you mirror packages internally.",
@@ -287,10 +287,10 @@
     { id: "e26", step: "2.6", until: "2.7", d: "M1265,235 H1200 V552 H620 V516", label: "2.6 · network role → WS SA", lx: 770, ly: 548 },
     { id: "e27", step: "2.7", until: "2.7", d: "M1265,262 H1240 V1062 H535 V1020", label: "2.7 · CMEK MANAGED_SERVICES → WS SA", lx: 600, ly: 1082 },
     // data access (step 3): storage credentials + external locations wired to their buckets.
-    { id: "e_sc_ro", step: "3", until: "3", d: "M1280,738 H1240 V768 H1160", label: "objectViewer", lx: 1240, ly: 742, vertical: true },
-    { id: "e_el_ro", step: "3", until: "3", d: "M1280,858 H1224 V805 H1160", label: "" },
-    { id: "e_sc_rw", step: "3", until: "3", d: "M1280,798 H1256 V860 H1160", label: "objectAdmin", lx: 1256, ly: 815, vertical: true },
-    { id: "e_el_rw", step: "3", until: "3", d: "M1280,918 H1236 V898 H1160", label: "" }
+    { id: "e_sc_ro", step: "3", until: "3", color: "#1baf7a", marker: "a", d: "M1280,738 H1240 V768 H1160", label: "objectViewer", lx: 1240, ly: 742, vertical: true },
+    { id: "e_el_ro", step: "3", until: "3", color: "#1baf7a", marker: "a", d: "M1280,858 H1224 V805 H1160", label: "" },
+    { id: "e_sc_rw", step: "3", until: "3", color: "#2a78d6", marker: "b", d: "M1280,798 H1256 V860 H1160", label: "objectAdmin", lx: 1256, ly: 815, vertical: true },
+    { id: "e_el_rw", step: "3", until: "3", color: "#2a78d6", marker: "b", d: "M1280,918 H1236 V898 H1160", label: "" }
   ];
 
   // PSC "wires": consumer endpoint → producer service attachment. Dashed/pending when
@@ -510,14 +510,15 @@
   }
 
   function drawEdge(e) {
+    var ec = e.color || "#eb6834", em = e.marker || "o";
     var g = E("g", { class: "flowg", "data-step": e.step }, layE);
-    E("path", { class: "flow", d: e.d, stroke: "#eb6834", "stroke-width": 1.6, "stroke-dasharray": "5 4",
-      fill: "none", "marker-end": "url(#arr-o)", opacity: 0.75 }, g);
+    E("path", { class: "flow", d: e.d, stroke: ec, "stroke-width": 1.6, "stroke-dasharray": "5 4",
+      fill: "none", "marker-end": "url(#arr-" + em + ")", opacity: 0.8 }, g);
     if (e.label) {
       var lw = e.label.length * fs(6) + 16;
       var lg = e.vertical ? E("g", { transform: "rotate(-90 " + e.lx + " " + e.ly + ")" }, g) : g;
-      E("rect", { x: e.lx - lw / 2, y: e.ly - fs(11), width: lw, height: fs(16.5), rx: 10, fill: "#fff4ef", stroke: "#f4c7b3" }, lg);
-      txt(lg, e.lx, e.ly, e.label, { "font-size": fs(10.5), "font-weight": 600, "text-anchor": "middle", fill: "#b3421f" });
+      E("rect", { x: e.lx - lw / 2, y: e.ly - fs(11), width: lw, height: fs(16.5), rx: 10, fill: e.color ? "#fff" : "#fff4ef", stroke: e.color ? ec : "#f4c7b3" }, lg);
+      txt(lg, e.lx, e.ly, e.label, { "font-size": fs(10.5), "font-weight": 600, "text-anchor": "middle", fill: e.color ? ec : "#b3421f" });
     }
     elByEdge[e.id] = g;
   }
