@@ -440,7 +440,7 @@
     nb_scc_in:   { c: "#eb6834", d: "M1264,464 H1200 V420 H1147", m: "o", label: "" },
     nb_dispatch: { c: "#eb6834", d: "M905,428 H866 V510 H830", m: "o", vertical: true, label: "N2 · command → driver · 6666", lx: 861, ly: 500 },
     // N3 request: driver -> frontend PSC endpoint -> plproxy (workspace REST/API, 443)
-    nb_req:      { c: "#eb6834", dash: "6 4", d: "M830,458 H882 V320 H905", m: "o", vertical: true, label: "N3 · request table · REST/API", lx: 885, ly: 568 },
+    nb_req:      { c: "#eb6834", dash: "6 4", d: "M830,458 H882 V320 H905", m: "o", label: "N3 · request table · REST/API", lx: 999, ly: 470 },
     nb_req2:     { c: "#eb6834", dash: "6 4", d: "M1145,305 H1200 V376 H1264", m: "o", label: "" },
     nb_req3:     { c: "#eb6834", dash: "6 4", d: "M1622,376 H1632 V700 H1615", m: "o", label: "" },
     // N4 vend: UC mints a down-scoped token, up to the control plane
@@ -614,18 +614,20 @@
     var p = E("path", { class: "flow draw", d: f.d, stroke: f.c, "stroke-width": 2.6, fill: "none",
       "marker-end": "url(#arr-" + f.m + ")" }, g);
     if (f.dash) p.setAttribute("stroke-dasharray", f.dash);
-    // label
+    // label — drawn in the flow-label layer (above connectors) so lines never cover it
+    var lab = null;
     if (f.label) {
       var lw = f.label.length * fs(6.1) + 16;
-      var lg = f.vertical ? E("g", { transform: "rotate(-90 " + f.lx + " " + f.ly + ")" }, g) : g;
-      E("rect", { x: f.lx - lw / 2, y: f.ly - fs(11.5), width: lw, height: fs(17), rx: 10, fill: "#fff", stroke: f.c }, lg);
-      txt(lg, f.lx, f.ly, f.label, { "font-size": fs(11), "font-weight": 600, "text-anchor": "middle", fill: f.c });
+      lab = E("g", { "pointer-events": "none" }, layFlab);
+      if (f.vertical) lab.setAttribute("transform", "rotate(-90 " + f.lx + " " + f.ly + ")");
+      E("rect", { x: f.lx - lw / 2, y: f.ly - fs(11.5), width: lw, height: fs(17), rx: 10, fill: "#fff", stroke: f.c }, lab);
+      txt(lab, f.lx, f.ly, f.label, { "font-size": fs(11), "font-weight": 600, "text-anchor": "middle", fill: f.c });
     }
     // crossings
     (f.cross || []).forEach(function (cr) {
       E("rect", { x: cr[0] - 4.5, y: cr[1] - 4.5, width: 9, height: 9, transform: "rotate(45 " + cr[0] + " " + cr[1] + ")", fill: "#d03b3b" }, g);
     });
-    elByFlow[id] = { g: g, path: p };
+    elByFlow[id] = { g: g, path: p, lab: lab };
     return elByFlow[id];
   }
 
@@ -647,7 +649,7 @@
   }
 
   // layers
-  var layC, layE, layW, layN, layF, layI;
+  var layC, layE, layW, layN, layF, layFlab, layI;
   function renderAll() {
     buildDefs();
     E("rect", { x: 0, y: 0, width: 1680, height: 1160, fill: "#fcfcfb" }, svg);
@@ -656,6 +658,7 @@
     layW = E("g", { id: "layW" }, svg);
     layN = E("g", { id: "layN" }, svg);
     layF = E("g", { id: "layF" }, svg);
+    layFlab = E("g", { id: "layFlab" }, svg);   // flow labels — above connectors so lines never cover them
     layI = E("g", { id: "layI" }, svg);   // VPC-SC ingress markers, on top
     containers.forEach(drawContainer);
     pscWires.forEach(drawWire);
@@ -734,7 +737,7 @@
   }
 
   function clearFlows() {
-    Object.keys(elByFlow).forEach(function (k) { elByFlow[k].g.remove(); delete elByFlow[k]; });
+    Object.keys(elByFlow).forEach(function (k) { elByFlow[k].g.remove(); if (elByFlow[k].lab) elByFlow[k].lab.remove(); delete elByFlow[k]; });
   }
   function clearFocus() {
     nodes.forEach(function (n) { if (elByNode[n.id]) elByNode[n.id].classList.remove("dim", "selected", "pulsing", "created"); });
