@@ -31,6 +31,10 @@
     { id: "service",   step: "2.1", x: 330, y: 574, w: 420, h: 466, label: "SERVICE PROJECT — DATABRICKS COMPUTE + STORAGE", cls: "frame" },
     { id: "maildata",  step: "0", x: 770, y: 703, w: 410, h: 337, label: "YAHOO MAIL DATA PROJECTS (EXISTING)", cls: "frame" },
     { id: "dbx",       step: "0", x: 1240, y: 140, w: 400, h: 820, label: "DATABRICKS-OWNED GCP PROJECTS", label2: "— OUTSIDE THE PERIMETER", cls: "frame" },
+    { id: "controlplane", step: "0", x: 1250, y: 286, w: 386, h: 294, label: "REGIONAL CONTROL PLANE", label2: "Cluster Manager · Jobs · Unity Catalog · SCC relay", cls: "subframe",
+      detail: {
+        what: "The Databricks-managed regional services for this workspace — the Cluster Manager (launches compute as the Workspace SA), the Job Scheduler, Unity Catalog, and the SCC relay. It is reached only through its two PSC attachments: plproxy (frontend UI / API / REST) and ngrok (backend SCC relay). No public path.",
+        conn: ["Reached only via its two PSC attachments — no public ingress", "Control-plane data (notebooks, results, secrets) is CMEK-encrypted (2.7)"] } },
     { id: "internet",  step: "0", x: 1240, y: 972, w: 400, h: 110, label: "PUBLIC INTERNET", cls: "frame" },
     { id: "uc",        step: "3", x: 1265, y: 688, w: 350, h: 266, label: "UNITY CATALOG — METASTORE", cls: "subframe",
       detail: {
@@ -78,21 +82,17 @@
           { label: "Network role · granted 2.6 (host node subnet)", body: "<code>compute.subnetworks.get</code>, <code>compute.subnetworks.use</code>." },
           { label: "CMEK · granted 2.7 (MANAGED_SERVICES)", body: "<code>cloudkms.cryptoKeyEncrypterDecrypter</code> on the CMEK key." } ],
         conn: ["Reached only via PSC — no public path"] } },
-    { id: "plproxy", step: "0", x: 1265, y: 290, w: 350, h: 85, title: "PSC attachment — plproxy",
-      lines: ["Frontend: Workspace UI / API"],
+    // plproxy + ngrok are the control plane's two PSC front doors — drawn INSIDE the controlplane frame.
+    { id: "plproxy", step: "0", x: 1264, y: 338, w: 358, h: 76, title: "PSC attachment — plproxy",
+      lines: ["Frontend: Workspace UI / API + REST"],
       detail: {
-        what: "Databricks-side Private Service Connect producer for front-end traffic. The workspace's frontend PSC endpoint connects to it.",
-        conn: ["Carries Workspace UI / API (users + clusters) · TLS 443"] } },
-    { id: "ngrok", step: "0", x: 1265, y: 390, w: 350, h: 85, title: "PSC attachment — ngrok",
-      lines: ["Backend: SCC relay"],
+        what: "The control plane's front-end PSC producer — its front door for the workspace UI, the REST APIs, and the cluster's own REST calls (e.g. UC credential requests). The workspace's frontend PSC endpoint connects to it.",
+        conn: ["Carries Workspace UI / API + REST (users + clusters) · TLS 443"] } },
+    { id: "ngrok", step: "0", x: 1264, y: 426, w: 358, h: 76, title: "PSC attachment — ngrok",
+      lines: ["Backend: SCC relay (reverse tunnel)"],
       detail: {
-        what: "Databricks-side PSC producer for the secure cluster connectivity (SCC) relay — how clusters dial home with no inbound path.",
+        what: "The control plane's back-end PSC producer for the secure cluster connectivity (SCC) relay — the reverse tunnel clusters dial out to, so the control plane can reach the driver with no inbound path.",
         conn: ["Carries SCC relay · TCP 6666 · always cluster-initiated"] } },
-    { id: "controlplane", step: "0", x: 1265, y: 490, w: 350, h: 85, title: "Regional control plane",
-      lines: ["Workspace UI/API · Cluster Manager · Jobs"],
-      detail: {
-        what: "The Databricks-managed regional services for this workspace: Workspace UI/API, the Cluster Manager that launches compute (acting as the Workspace SA), the Job Scheduler, and more.",
-        conn: ["Reached only via the frontend PSC endpoint — no public ingress", "Control-plane data (notebooks, results, secrets) is CMEK-encrypted (2.7)"] } },
     { id: "accountapi", step: "0", x: 1265, y: 585, w: 350, h: 83, title: "Account API",
       lines: ["Provisioning + IdP sync"],
       detail: {
@@ -177,12 +177,12 @@
         repo: "post-workspace/iam.tf" } },
 
     // Node subnet — runtime VMs (tabs 2/3)
-    { id: "drivervm", step: "run", x: 370, y: 452, w: 220, h: 86, title: "Driver VM",
+    { id: "drivervm", step: "run", x: 610, y: 452, w: 220, h: 86, title: "Driver VM",
       lines: ["Runtime + Photon"],
       detail: {
-        what: "The cluster driver in the private node subnet. Runs the Databricks Runtime and the Photon vectorized engine on CMEK-encrypted disks.",
+        what: "The cluster driver in the private node subnet. Runs the Databricks Runtime and the Photon vectorized engine on CMEK-encrypted disks. Placed next to the PSC endpoints so it holds the control-plane connections.",
         conn: ["Runs as the Compute SA (or a custom Cluster SA) — not the Workspace SA"] } },
-    { id: "execvm", step: "run", x: 610, y: 452, w: 220, h: 86, title: "Executor VMs × N",
+    { id: "execvm", step: "run", x: 370, y: 452, w: 220, h: 86, title: "Executor VMs × N",
       lines: ["Spark executors (autoscaling)"],
       detail: {
         what: "Autoscaling Spark executors running Photon on CMEK-encrypted disks in the node subnet. They do the actual data scan.",
@@ -348,8 +348,8 @@
   // PSC "wires": consumer endpoint → producer service attachment. Dashed/pending when
   // the endpoints are first created (2.2); solid once registered → ACCEPTED (2.4).
   var pscWires = [
-    { id: "wf", d: "M1145,305 H1205 V332 H1263" },
-    { id: "wb", d: "M1145,405 H1205 V432 H1263" }
+    { id: "wf", d: "M1145,305 H1200 V376 H1264" },
+    { id: "wb", d: "M1145,410 H1200 V464 H1264" }
   ];
 
   /* ---------------- deployment steps ---------------- */
@@ -425,28 +425,31 @@
   var flows = {
     // cluster launch
     l1a:   { c: "#2a78d6", d: "M270,180 H872 V305 H901", m: "b", label: "L1 · clusters/create · TLS 443", lx: 571, ly: 180, cross: [[300, 180, "B1"]] },
-    l1b:   { c: "#2a78d6", d: "M1145,305 H1205 V332 H1263", m: "b", label: "", lx: 1180, ly: 300 },
+    l1b:   { c: "#2a78d6", d: "M1145,305 H1200 V376 H1264", m: "b", label: "" },
     l2:     { c: "#eb6834", d: "M1265,515 H830", m: "o", label: "L2 · GCE: launch VMs — as the Workspace SA", lx: 1047, ly: 515 },
     l2wssa: { c: "#eb6834", dash: "6 4", d: "M1265,250 H1225 V515 H1210", m: "o", label: "" },
     l2csa:  { c: "#eb6834", dash: "6 4", d: "M350,727 H316 V568 H585 V538", m: "o", vertical: true, label: "Workspace SA assigns Compute SA as VM identity", lx: 316, ly: 648 },
     l2cmek: { c: "#eb6834", dash: "6 4", d: "M720,994 H740 V568 H615 V538", m: "o", vertical: true, label: "disks come up CMEK encrypted", lx: 740, ly: 781 },
     tunnel:{ c: "#8a8880", dash: "4 3", d: "M450,420 V393", m: "g", label: "resolve tunnel.<region>", lx: 462, ly: 410 },
     l3:    { c: "#eb6834", d: "M860,505 H882 V405 H901", m: "o", label: "L3 · 6666", lx: 874, ly: 470 },
-    b3:    { c: "#eb6834", d: "M1145,405 H1205 V432 H1263", m: "o", label: "" },
+    b3:    { c: "#eb6834", d: "M1145,410 H1200 V464 H1264", m: "o", label: "" },
     // notebook runtime — analyst rides the frontend wire (443); cluster<->control plane rides the SCC relay (6666)
     n1:    { c: "#2a78d6", d: "M270,180 H872 V305 H901", m: "b", label: "N1 · notebook command · TLS 443", lx: 571, ly: 180, cross: [[300, 180, "B1"]] },
-    n1b:   { c: "#2a78d6", d: "M1145,305 H1205 V332 H1263", m: "b", label: "" },
-    // N2 command dispatch: control plane -> driver over the SCC relay (on the cluster's own outbound connection)
-    nb_dispatch: { c: "#eb6834", d: "M901,388 H882 V452 H860", m: "o", label: "N2 · command → driver · 6666", lx: 700, ly: 360 },
-    // N3 request: driver -> control plane (UC) over the SCC relay
-    nb_req:      { c: "#eb6834", dash: "6 4", d: "M860,472 H874 V406 H901", m: "o", label: "N3 · request table · 6666", lx: 700, ly: 384 },
+    n1b:   { c: "#2a78d6", d: "M1145,305 H1200 V376 H1264", m: "b", label: "" },
+    // N2 command dispatch: ngrok -> backend PSC endpoint -> DRIVER (right VM), over the SCC relay (6666)
+    nb_dispatch: { c: "#eb6834", d: "M905,428 H866 V510 H830", m: "o", label: "N2 · command → driver · 6666", lx: 690, ly: 346 },
+    // N3 request: driver -> frontend PSC endpoint -> plproxy (workspace REST/API, 443)
+    nb_req:      { c: "#eb6834", dash: "6 4", d: "M830,458 H882 V320 H905", m: "o", label: "N3 · request table from UC · REST/API", lx: 690, ly: 370 },
     // N4 vend: UC mints a down-scoped token, up to the control plane
-    nb_vend:     { c: "#eb6834", d: "M1265,700 H1250 V540 H1265", m: "o", vertical: true, label: "N4 · UC mints down-scoped token", lx: 1250, ly: 620 },
-    // N5 context: control plane -> driver over the SCC relay
-    nb_ctx:      { c: "#eb6834", dash: "6 4", d: "M901,428 H866 V496 H860", m: "o", label: "N5 · down-scoped context · 6666", lx: 700, ly: 408 },
-    f7:    { c: "#1baf7a", d: "M728,538 V745 H784", m: "a", label: "N6 · read · RO SA", lx: 515, ly: 690, cross: [[786, 745, "ingress"]] },
-    f8:    { c: "#1baf7a", d: "M745,538 V846 H784", m: "a", label: "N6 · write · RW SA", lx: 515, ly: 712, cross: [[786, 846, "ingress"]] },
-    ret:   { c: "#2a78d6", dash: "5 4", d: "M901,320 H860 V472 H832", m: "b", label: "N7 · results → analyst · 443", lx: 690, ly: 700 },
+    nb_vend:     { c: "#eb6834", d: "M1265,700 H1250 V545 H1265", m: "o", vertical: true, label: "N4 · UC mints down-scoped token", lx: 1250, ly: 632 },
+    // N5 context: plproxy -> frontend PSC endpoint -> driver (REST response — no 6666)
+    nb_ctx:      { c: "#eb6834", dash: "6 4", d: "M905,340 H896 V480 H830", m: "o", label: "N5 · GCS token scoped to table paths · REST", lx: 690, ly: 394 },
+    // N6 governed reads: executors (left VM) -> down the service/mail-data gap -> GCS buckets
+    f7:    { c: "#1baf7a", d: "M548,538 V556 H764 V745 H786", m: "a", vertical: true, label: "N6 · read · RO SA", lx: 764, ly: 652, cross: [[786, 745, "ingress"]] },
+    f8:    { c: "#1baf7a", d: "M568,538 V566 H752 V846 H786", m: "a", vertical: true, label: "N6 · write · RW SA", lx: 752, ly: 808, cross: [[786, 846, "ingress"]] },
+    // N7 results: executors -> driver (processed dataset), then driver -> frontend PSC -> plproxy -> analyst
+    nb_exec_ret: { c: "#2a78d6", dash: "5 4", d: "M590,498 H610", m: "b", label: "processed dataset", lx: 600, ly: 432 },
+    ret:   { c: "#2a78d6", dash: "5 4", d: "M830,502 H872 V306 H905", m: "b", label: "N7 · results → analyst · 443", lx: 690, ly: 418 },
     // 2.4 read-only "verify settings" sub-animation (Account API, via the creator role)
     v_net:  { c: "#8a8880", dash: "5 4", d: "M1265,610 H1216 V332 H1149", m: "g", label: "verify · network / PSC (read-only)", lx: 1120, ly: 600 },
     v_svc:  { c: "#8a8880", dash: "5 4", d: "M1265,640 H1210 V1068 H648 V1040", m: "g", label: "verify · service project (read-only)", lx: 860, ly: 1063 },
@@ -485,8 +488,8 @@
       desc: "The driver hands the token to the executors; they read Mail data directly from GCS AS the vended UC storage-credential SA (never the VM's own SA), passing the VPC-SC ingress gate (identity-pinned, method-scoped, source-pinned). Photon runs the vectorized scan; results are written to the analytics bucket.",
       flows: ["f7", "f8"], focus: ["execvm", "datalake", "analytics"], pulse: ["drivervm", "execvm"] },
     { id: "N7", title: "N7 · Results return to the analyst", team: "data",
-      desc: "Results return over the frontend PSC wire (443). The control plane sees metadata + query text (CMEK-encrypted) — never the data itself. The data never leaves the perimeter.",
-      flows: ["ret"], focus: ["admin", "drivervm"] }
+      desc: "The executors send the processed dataset to the driver; the driver returns results over the frontend PSC wire → plproxy → analyst (443). The control plane sees metadata + query text (CMEK-encrypted) — never the data itself. The data never leaves the perimeter.",
+      flows: ["nb_exec_ret", "ret"], focus: ["admin", "drivervm", "execvm"] }
   ];
 
   /* ================= rendering ================= */
