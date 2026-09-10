@@ -440,7 +440,7 @@
     nb_scc_in:   { c: "#eb6834", d: "M1264,464 H1200 V420 H1147", m: "o", label: "" },
     nb_dispatch: { c: "#eb6834", d: "M905,428 H866 V510 H830", m: "o", vertical: true, label: "N2 · command → driver · 6666", lx: 861, ly: 500 },
     // N3 request: driver -> frontend PSC endpoint -> plproxy (workspace REST/API, 443)
-    nb_req:      { c: "#eb6834", dash: "6 4", d: "M830,458 H882 V320 H905", m: "o", vertical: true, label: "N3 · request table from UC · REST/API", lx: 889, ly: 378 },
+    nb_req:      { c: "#eb6834", dash: "6 4", d: "M830,458 H882 V320 H905", m: "o", vertical: true, label: "N3 · request table · REST/API", lx: 885, ly: 568 },
     nb_req2:     { c: "#eb6834", dash: "6 4", d: "M1145,305 H1200 V376 H1264", m: "o", label: "" },
     nb_req3:     { c: "#eb6834", dash: "6 4", d: "M1622,376 H1632 V700 H1615", m: "o", label: "" },
     // N4 vend: UC mints a down-scoped token, up to the control plane
@@ -480,7 +480,7 @@
       flows: ["nb_scc_in", "nb_dispatch"], focus: ["controlplane", "backendpsc", "ngrok", "drivervm"] },
     { id: "N3", title: "N3 · Driver asks UC for the table", team: "data",
       desc: "Executing the command, the driver needs to read a table, so it calls Unity Catalog via the workspace REST API — driver → frontend PSC endpoint → plproxy → UC (443, not the SCC relay).",
-      flows: ["nb_req", "nb_req2", "nb_req3"], focus: ["drivervm", "frontendpsc", "controlplane"] },
+      flows: ["nb_req", "nb_req2", "nb_req3"], focus: ["drivervm", "frontendpsc", "plproxy", "controlplane", "uc"] },
     { id: "N4", title: "N4 · UC checks the grant & vends a down-scoped token", team: "data",
       desc: "Unity Catalog verifies the querying principal holds the privilege, then uses the storage credential's vended GCP SA to mint a short-lived, path-scoped GCS token — read-only or read-write per the credential. No standing key leaves UC.",
       flows: ["nb_vend"], focus: ["controlplane", "sc_ro", "sc_rw"] },
