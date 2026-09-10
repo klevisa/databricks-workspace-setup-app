@@ -6,7 +6,7 @@
   "use strict";
 
   var SVGNS = "http://www.w3.org/2000/svg";
-  var ORDER = ["0", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8"];
+  var ORDER = ["0", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", "end"];
   var oi = function (s) { return ORDER.indexOf(String(s)); };
 
   /* ===== Global text-size lever (code-only — NOT exposed in the UI) =====
@@ -28,9 +28,9 @@
   var containers = [
     { id: "perimeter", step: "0", x: 300, y: 140, w: 910, h: 945, label: "YAHOO GCP — VPC-SC SERVICE PERIMETER (TRUST BOUNDARY)", cls: "perimeter" },
     { id: "host",      step: "0", x: 330, y: 190, w: 850, h: 367, label: "HOST PROJECT — SHARED VPC (NETWORK, CENTRALLY OWNED)", cls: "frame" },
-    { id: "service",   step: "2.1", x: 330, y: 574, w: 410, h: 466, label: "SERVICE PROJECT — DATABRICKS COMPUTE + STORAGE", cls: "frame" },
+    { id: "service",   step: "2.1", x: 330, y: 574, w: 420, h: 466, label: "SERVICE PROJECT — DATABRICKS COMPUTE + STORAGE", cls: "frame" },
     { id: "maildata",  step: "0", x: 770, y: 703, w: 410, h: 337, label: "YAHOO MAIL DATA PROJECTS (EXISTING)", cls: "frame" },
-    { id: "dbx",       step: "0", x: 1240, y: 140, w: 400, h: 700, label: "DATABRICKS-OWNED GCP PROJECTS — OUTSIDE THE PERIMETER", cls: "frame" },
+    { id: "dbx",       step: "0", x: 1240, y: 140, w: 400, h: 700, label: "DATABRICKS-OWNED GCP PROJECTS", label2: "— OUTSIDE THE PERIMETER", cls: "frame" },
     { id: "internet",  step: "0", x: 1240, y: 870, w: 400, h: 120, label: "PUBLIC INTERNET", cls: "frame" },
     { id: "pscsubnet", step: "2.2", x: 890, y: 225, w: 270, h: 265, label: "PSC SUBNET x.x.x.x/28 (min /28)", cls: "subframe" },
     { id: "nodesubnet",step: "2.2", x: 350, y: 420, w: 510, h: 122, label: "NODE SUBNET x.x.x.x/y · NPIP · PGA ON", cls: "subframe",
@@ -92,7 +92,7 @@
 
     // Host project — network (2.2)
     { id: "dnszone", step: "2.2", x: 350, y: 235, w: 250, h: 155, title: "Private DNS zone",
-      lines: ["Resolves hostnames → private PSC IPs"], pill: "dns",
+      lines: ["Resolves hostnames →", "private PSC endpoint IPs"], pill: "dns",
       detail: {
         what: "A private Cloud DNS zone for gcp.databricks.com that maps the workspace hostnames to the reserved private IPs of the PSC endpoints, so resolution stays inside the VPC.",
         owner: "network",
@@ -106,9 +106,9 @@
 
     // The host-project half of the creator grant (a separate per-project custom role),
     // held by the same workspace-creator SA that lives in the service project.
-    { id: "crole_host", step: "2.2", x: 895, y: 463, w: 260, h: 74, title: "Creator role · host",
+    { id: "crole_host", step: "2.2", x: 895, y: 463, w: 260, h: 82, title: "Creator role · host",
       lines: ["Read-only settings validation"],
-      identity: "IDENTITY · held by the workspace-creator SA",
+      identity: ["IDENTITY · held by the", "workspace-creator SA"],
       detail: {
         what: "Read-only custom role on the HOST project. It lets the workspace-creator SA validate host-network settings during workspace creation — it grants no create/modify power.",
         owner: "network",
@@ -131,7 +131,7 @@
         repo: "network/" } },
     // Workspace-SA network operator role — granted at 2.6, lives on the host node subnet.
     // deployOnly so it doesn't collide with the runtime VMs that fill this subnet in tabs 2/3.
-    { id: "netrole", step: "2.6", x: 366, y: 450, w: 300, h: 66, title: "Workspace operator network role", deployOnly: true,
+    { id: "netrole", step: "2.6", x: 366, y: 450, w: 345, h: 66, title: "Workspace operator network role", deployOnly: true,
       lines: ["subnetworks.get / use (node subnet)"],
       identity: "IDENTITY · granted to the WS SA · node subnet",
       detail: {
@@ -247,9 +247,10 @@
   // grant edges from the Workspace SA into the perimeter. Routed via the right gap +
   // bottom corridor so they never cross the Yahoo Mail data projects frame.
   var edges = [
-    { id: "e25", step: "2.5", d: "M1265,270 H1226 V1058 H430 V1040", label: "2.5 · project + resource roles → WS SA", lx: 690, ly: 1054 },
+    { id: "e25a", step: "2.5", d: "M1265,286 H1232 V1076 H308 V802 H350", label: "2.5 · project role", lx: 320, ly: 802, vertical: true },
+    { id: "e25b", step: "2.5", d: "M1265,278 H1225 V1048 H758 V864 H720", label: "2.5 · resource role", lx: 760, ly: 864, vertical: true },
     { id: "e26", step: "2.6", d: "M1265,250 H1192 V540 H862", label: "2.6 · network role → WS SA", lx: 1015, ly: 532 },
-    { id: "e27", step: "2.7", d: "M1265,262 H1232 V1076 H344 V994 H350", label: "2.7 · CMEK MANAGED_SERVICES → WS SA", lx: 640, ly: 1072 }
+    { id: "e27", step: "2.7", d: "M1265,262 H1240 V1062 H535 V1020", label: "2.7 · CMEK MANAGED_SERVICES → WS SA", lx: 600, ly: 1082 }
   ];
 
   // PSC "wires": consumer endpoint → producer service attachment. Dashed/pending when
@@ -295,7 +296,7 @@
     { id: "2.5", label: "Workspace-SA operator roles", short: "Operator roles", team: "iam", repo: "workspace-sa-roles/",
       narrative: "Cloud IAM defines and grants the Project role and the workspace-scoped Resource role to the Workspace SA on the service project. The Resource role carries storage.buckets.create / compute.instances.create — the permissions that let the SA build the workspace's storage and VMs — scoped by an IAM condition to this workspace's resources.",
       privileges: ["iam.roleAdmin  (service project)", "resourcemanager.projectIamAdmin  (service project)"],
-      creates: ["projrole", "resrole"], edges: ["e25"], creatLabel: ["Project role + Resource role → Workspace SA"] },
+      creates: ["projrole", "resrole"], edges: ["e25a", "e25b"], creatLabel: ["Project role + Resource role → Workspace SA"] },
 
     { id: "2.6", label: "Post-workspace config", short: "Network role + DNS", team: "network", repo: "post-workspace/",
       narrative: "Network Engineering grants the Workspace SA the custom network role (subnetworks.get/use) on the node subnet so it can place VMs across the Shared-VPC boundary, and writes the four DNS A-records into the zone so workspace hostnames resolve to the private PSC IPs.",
@@ -311,8 +312,15 @@
     { id: "2.8", label: "Finalize — PHASE 2", short: "Workspace RUNNING", team: "data", repo: "workspace/ (finalize=true)",
       narrative: "Data Platform re-applies with finalize=true. expected_workspace_status flips to RUNNING; the now-authorized Workspace SA provisions the workspace GCS buckets + GCE disks (CMEK-encrypted). The workspace is assigned to the metastore and reaches RUNNING.",
       privileges: ["Databricks account admin"],
-      creates: ["wsbuckets"], changed: ["wssa"], creatLabel: ["Workspace GCS buckets + GCE disks", "Workspace → RUNNING"],
-      states: { wssa: "workspace: RUNNING" } }
+      creates: ["wsbuckets"], changed: ["wssa"], hideEdges: true, creatLabel: ["Workspace GCS buckets + GCE disks", "Workspace → RUNNING"],
+      states: { wssa: "workspace: RUNNING" } },
+
+    { id: "end", label: "End state — least privilege", short: "End state", team: null,
+      narrative: "The workspace is RUNNING. The bootstrap identity is now torn down: the workspace-creator SA and its two read-only creator roles (service + host) are deleted — they were only needed to create the workspace. What remains is the least-privilege steady state — the Workspace SA with its operator roles, the Compute SA, and the CMEK key.",
+      privileges: [], creates: [], hideEdges: true,
+      deletes: ["creatorsa", "crole_svc", "crole_host"],
+      delLabel: ["Workspace-creator SA", "Creator role · service", "Creator role · host"],
+      note: "Least-privilege hygiene: no standing account-admin creator identity remains after the workspace is built." }
   ];
 
   /* ---------------- flows (tabs 2 & 3) ---------------- */
@@ -335,8 +343,8 @@
     ret:   { c: "#2a78d6", dash: "5 4", d: "M901,320 H860 V472 H832", m: "b", label: "results → analyst (nothing data-bearing via control plane)", lx: 690, ly: 700 },
     // 2.4 read-only "verify settings" sub-animation (Account API, via the creator role)
     v_net:  { c: "#8a8880", dash: "5 4", d: "M1265,700 H1216 V332 H1149", m: "g", label: "verify · network / PSC (read-only)", lx: 1120, ly: 700 },
-    v_svc:  { c: "#8a8880", dash: "5 4", d: "M1265,758 H1210 V1050 H520 V1040", m: "g", label: "verify · service project (read-only)", lx: 800, ly: 1046 },
-    v_cmek: { c: "#8a8880", dash: "5 4", d: "M1265,772 H1200 V1072 H346 V994 H350", m: "g", label: "verify · CMEK (read-only)", lx: 470, ly: 1068 }
+    v_svc:  { c: "#8a8880", dash: "5 4", d: "M1265,758 H1210 V1055 H648 V1040", m: "g", label: "verify · service project (read-only)", lx: 830, ly: 1050 },
+    v_cmek: { c: "#8a8880", dash: "5 4", d: "M1265,772 H1200 V1078 H318 V994 H350", m: "g", label: "verify · CMEK (read-only)", lx: 430, ly: 1088 }
   };
 
   var launchStages = [
@@ -400,7 +408,9 @@
       "stroke-width": isPeri ? 2 : 1,
       "stroke-dasharray": isPeri ? "8 5" : (isSub ? "4 3" : "0")
     }, g);
-    txt(g, c.x + 16, c.y + fs(17), c.label, { "font-size": fs(12), "font-weight": 700, "letter-spacing": "0.2", fill: isPeri ? "#d03b3b" : "#898781" });
+    var lblFill = isPeri ? "#d03b3b" : "#898781";
+    txt(g, c.x + 16, c.y + fs(16), c.label, { "font-size": fs(11.5), "font-weight": 700, "letter-spacing": "0.2", fill: lblFill });
+    if (c.label2) txt(g, c.x + 16, c.y + fs(16) + fs(13.5), c.label2, { "font-size": fs(11.5), "font-weight": 700, "letter-spacing": "0.2", fill: lblFill });
     if (c.detail) {
       g.classList.add("clickable");
       cbox.setAttribute("pointer-events", "all");   // fill:none subframes ignore clicks otherwise
@@ -435,9 +445,13 @@
     var tF = fs(14.5), lF = fs(12), tY = n.y + tF + 7, lH = lF + fs(3.4);
     txt(g, n.x + 13, tY, n.title, { "font-size": tF, "font-weight": 600, fill: "#0b0b0b" });
     (n.lines || []).forEach(function (ln, i) {
-      txt(g, n.x + 13, tY + fs(11) + i * lH, ln, { "font-size": lF, fill: "#52514e" });
+      txt(g, n.x + 13, tY + fs(16) + i * lH, ln, { "font-size": lF, fill: "#52514e" });
     });
-    if (n.identity) txt(g, n.x + 13, n.y + n.h - 9, n.identity, { "font-size": fs(10.3), "font-weight": 600, fill: "#eb6834" });
+    if (n.identity) {
+      var idl = Array.isArray(n.identity) ? n.identity : [n.identity];   // identity may be 1 or 2 lines
+      var iBase = n.y + n.h - 9 - (idl.length - 1) * fs(11.5);
+      idl.forEach(function (s, i) { txt(g, n.x + 13, iBase + i * fs(11.5), s, { "font-size": fs(10.3), "font-weight": 600, fill: "#eb6834" }); });
+    }
     if (n.pill) {
       var pg = E("g", { class: "statepill" }, g);
       var pr = E("rect", { x: n.x + n.w - 104, y: n.y + n.h - 27, width: 96, height: 19, rx: 9.5, fill: "#fff", stroke: "#c3c2b7" }, pg);
@@ -454,8 +468,9 @@
     E("path", { class: "flow", d: e.d, stroke: "#eb6834", "stroke-width": 1.6, "stroke-dasharray": "5 4",
       fill: "none", "marker-end": "url(#arr-o)", opacity: 0.75 }, g);
     var lw = e.label.length * fs(6) + 16;
-    E("rect", { x: e.lx - lw / 2, y: e.ly - fs(11), width: lw, height: fs(16.5), rx: 10, fill: "#fff4ef", stroke: "#f4c7b3" }, g);
-    txt(g, e.lx, e.ly, e.label, { "font-size": fs(10.5), "font-weight": 600, "text-anchor": "middle", fill: "#b3421f" });
+    var lg = e.vertical ? E("g", { transform: "rotate(-90 " + e.lx + " " + e.ly + ")" }, g) : g;
+    E("rect", { x: e.lx - lw / 2, y: e.ly - fs(11), width: lw, height: fs(16.5), rx: 10, fill: "#fff4ef", stroke: "#f4c7b3" }, lg);
+    txt(lg, e.lx, e.ly, e.label, { "font-size": fs(10.5), "font-weight": 600, "text-anchor": "middle", fill: "#b3421f" });
     elByEdge[e.id] = g;
   }
 
@@ -562,7 +577,13 @@
       var vis = n.step !== "run" && oi(n.step) <= maxIdx && oi(n.step) >= 0;
       toggle(elByNode[n.id], vis);
     });
-    edges.forEach(function (e) { toggle(elByEdge[e.id], oi(e.step) <= maxIdx); });
+    // teardown: hide anything a step at/before maxIdx deletes (e.g. the End step removes the creator SA + its roles)
+    for (var si = 0; si <= maxIdx && si < steps.length; si++) {
+      (steps[si].deletes || []).forEach(function (id) { toggle(elByNode[id] || elByContainer[id], false); });
+    }
+    // grant edges are hidden once the workspace is finalized (2.8+) — keeps the RUNNING state clean
+    var hideE = steps[maxIdx] && steps[maxIdx].hideEdges;
+    edges.forEach(function (e) { toggle(elByEdge[e.id], !hideE && oi(e.step) <= maxIdx); });
     updateWires(maxIdx);
   }
 
@@ -608,7 +629,7 @@
     list.forEach(function (s, i) {
       var li = document.createElement("li");
       li.className = "step-item" + (i === activeIdx ? " active" : "") + (i < activeIdx ? " done" : "");
-      var badge = kind === "deploy" ? (s.id === "0" ? "•" : s.id) : s.id;
+      var badge = kind === "deploy" ? (s.id === "0" ? "•" : (s.id === "end" ? "✓" : s.id)) : s.id;
       var team = s.team ? TEAM[s.team].name : "";
       li.innerHTML = '<span class="step-badge">' + badge + '</span><span class="step-meta"><span class="step-name">' +
         (s.short || s.title) + '</span><span class="step-team">' + team + '</span></span>';
@@ -620,10 +641,15 @@
   function panelDeploy(s) {
     var p = document.getElementById("panelBody");
     var team = s.team ? TEAM[s.team] : null;
-    var h = '<div class="step-id">' + (s.id === "0" ? "Starting point" : "Step " + s.id) + '</div>';
+    var h = '<div class="step-id">' + (s.id === "0" ? "Starting point" : (s.id === "end" ? "End state" : "Step " + s.id)) + '</div>';
     h += '<h2>' + s.label + '</h2>';
     if (team) h += '<span class="chip" style="background:' + team.color + '">' + team.name + '</span>';
     h += '<p>' + s.narrative + '</p>';
+    if (s.delLabel && s.delLabel.length) {
+      h += '<h3>Removed this step</h3><div>';
+      s.delLabel.forEach(function (r) { h += '<span class="tag del">' + r + '</span>'; });
+      h += '</div>';
+    }
     if (s.privileges && s.privileges.length) {
       h += '<h3>Privileges in use</h3><div>';
       s.privileges.forEach(function (pv) { h += '<span class="tag priv">' + pv + '</span>'; });

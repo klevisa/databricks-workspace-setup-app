@@ -215,6 +215,7 @@ body {
 }
 .tag.priv { border-color: #f4c7b3; background: #fff4ef; color: #b3421f; }
 .tag.res { border-color: #b7e0cf; background: #eafaf3; color: var(--green); }
+.tag.del { border-color: #f0c2c2; background: #fdeeee; color: var(--red); text-decoration: line-through; }
 .muted { color: var(--faint); font-size: .82rem; }
 .note { font-size: .78rem; color: var(--faint); border-left: 3px solid var(--line); padding-left: .6rem; margin-top: .8rem; }
 
