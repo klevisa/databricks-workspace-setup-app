@@ -301,17 +301,17 @@
   var ingress = [
     { id: "ing_ws", step: "2.4", x: 1210, y: 626, title: "VPC-SC ingress · workspace",
       detail: {
-        what: "The foundational VPC-SC ingress rule that admits Databricks into your perimeter to create, validate, and run the workspace. The 2.4 validation call is made by Databricks bearing the creator SA's access token, but it <em>originates from Databricks' control-plane projects</em> (outside the perimeter) — so VPC-SC blocks it unless the perimeter admits those source projects, even though IAM allows it.",
+        what: "The VPC-SC ingress rule that admits Databricks into your perimeter to create, validate, and run the workspace. These calls originate from Databricks' control-plane projects (outside the perimeter), so VPC-SC blocks them unless the perimeter admits them — even though IAM allows them.",
         extra: [
-          { label: "Identity = ANY_IDENTITY (not a single SA)", body: "You do NOT pin one SA here. The calls come from Databricks-owned projects and Databricks mints/uses several control-plane SAs during creation — so trust is pinned by <strong>source project</strong>, not identity." },
+          { label: "Identity — pin the specific SAs (least-privilege)", body: "Name the two SAs that actually hold roles: the <strong>workspace-creator SA</strong> (read-only validation, 2.4 — Databricks bears its access token) and the <strong>Workspace SA</strong> (build at 2.8 + runtime — added once 2.4 mints and returns it). Databricks' <em>general</em> examples use <code>ANY_IDENTITY</code> from the control-plane projects, but that's the coarse option (it even admits unauthenticated callers); since IAM already scopes these SAs, pinning them is the least-privilege choice." },
           { label: "Source-pinned to these Databricks project numbers (ip-domain-region list)", items: [
             "<strong>us-central1</strong> control-plane VPC host project — <strong>only required for workspace creation</strong> (account-level ops route through us-central1)",
             "regional control-plane VPC host project(s)",
             "regional control-plane Unity Catalog project",
             "regional audit-log delivery project",
             "regional serverless-compute project" ] },
-          { label: "Into", body: "the host + service projects · <code>storage</code>, <code>compute</code>, <code>cloudkms</code>, <code>serviceusage</code> (all actions)." } ],
-        conn: ["Admits: 2.4 settings validation (creator SA's token) · 2.7 CMEK ops · 2.8 bucket/disk/SA creation · runtime VM launch (as the Workspace SA)"],
+          { label: "Into", body: "the host + service projects · <code>storage</code>, <code>compute</code>, <code>cloudkms</code>, <code>serviceusage</code>. VPC-SC requires BOTH identity and source to match (AND)." } ],
+        conn: ["Admits: 2.4 validation (as the workspace-creator SA) · 2.7 CMEK ops + 2.8 build + runtime VM launch (as the Workspace SA)"],
         note: "In this playbook the perimeter is customer-supplied, so this ingress is a prerequisite set on your existing perimeter — not created by workspace-setup/." } },
     { id: "ing_ro", step: "3", x: 1210, y: 760, title: "VPC-SC ingress · data lake (RO)",
       detail: {
