@@ -6,7 +6,7 @@
   "use strict";
 
   var SVGNS = "http://www.w3.org/2000/svg";
-  var ORDER = ["0", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", "end"];
+  var ORDER = ["0", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", "3", "end"];
   var oi = function (s) { return ORDER.indexOf(String(s)); };
 
   /* ===== Global text-size lever (code-only — NOT exposed in the UI) =====
@@ -30,8 +30,8 @@
     { id: "host",      step: "0", x: 330, y: 190, w: 850, h: 367, label: "HOST PROJECT — SHARED VPC (NETWORK, CENTRALLY OWNED)", cls: "frame" },
     { id: "service",   step: "2.1", x: 330, y: 574, w: 420, h: 466, label: "SERVICE PROJECT — DATABRICKS COMPUTE + STORAGE", cls: "frame" },
     { id: "maildata",  step: "0", x: 770, y: 703, w: 410, h: 337, label: "YAHOO MAIL DATA PROJECTS (EXISTING)", cls: "frame" },
-    { id: "dbx",       step: "0", x: 1240, y: 140, w: 400, h: 700, label: "DATABRICKS-OWNED GCP PROJECTS", label2: "— OUTSIDE THE PERIMETER", cls: "frame" },
-    { id: "internet",  step: "0", x: 1240, y: 870, w: 400, h: 120, label: "PUBLIC INTERNET", cls: "frame" },
+    { id: "dbx",       step: "0", x: 1240, y: 140, w: 400, h: 820, label: "DATABRICKS-OWNED GCP PROJECTS", label2: "— OUTSIDE THE PERIMETER", cls: "frame" },
+    { id: "internet",  step: "0", x: 1240, y: 972, w: 400, h: 110, label: "PUBLIC INTERNET", cls: "frame" },
     { id: "pscsubnet", step: "2.2", x: 890, y: 225, w: 270, h: 265, label: "PSC SUBNET x.x.x.x/28 (min /28)", cls: "subframe" },
     { id: "nodesubnet",step: "2.2", x: 350, y: 420, w: 510, h: 122, label: "NODE SUBNET x.x.x.x/y · NPIP · PGA ON", cls: "subframe",
       detail: {
@@ -89,6 +89,17 @@
       detail: {
         what: "The account-level control plane at accounts.gcp.databricks.com. It provisions workspaces and syncs identities.",
         conn: ["Workspace provisioning (creates the workspace in 2.4)", "IdP sync: Okta → Account API", "Auth: account admin via Google OIDC tokens"] } },
+    { id: "uc", step: "3", x: 1265, y: 838, w: 350, h: 100, title: "Unity Catalog — metastore",
+      lines: ["RO cred → data lake · RW cred → analytics", "+ external locations & catalogs"],
+      detail: {
+        what: "The account-level Unity Catalog metastore. In the data-access phase it gains two storage credentials — each generating its own Databricks GCP SA — and two external locations that give the workspace governed access to GCS.",
+        owner: "data",
+        extra: [
+          { label: "Read-only credential → data lake", body: "vended SA granted <code>roles/storage.objectViewer</code> + <code>legacyBucketReader</code>; read-only external location + <code>source_data_ro</code> catalog (namespace only)." },
+          { label: "Read-write credential → analytics", body: "vended SA granted <code>roles/storage.objectAdmin</code> on the analytics bucket (created here); read-write external location + managed <code>analytics</code> catalog (storage_root on the bucket)." },
+          { label: "Automation (least-privilege)", body: "a catalog automation SP holds scoped <code>CREATE_STORAGE_CREDENTIAL</code> / <code>CREATE_EXTERNAL_LOCATION</code> / <code>CREATE_CATALOG</code> — not metastore admin — and owns what it creates." } ],
+        conn: ["Each vended SA reaches its bucket through a VPC-SC ingress rule (RO: read methods · RW: all)"],
+        repo: "data-access/" } },
 
     // Host project — network (2.2)
     { id: "dnszone", step: "2.2", x: 350, y: 235, w: 250, h: 155, title: "Private DNS zone",
@@ -236,7 +247,7 @@
         what: "Existing Yahoo Mail BigQuery datasets, queried through the governed data path." } },
 
     // Public internet
-    { id: "pkgrepos", step: "0", x: 1265, y: 905, w: 350, h: 70, title: "Package repos",
+    { id: "pkgrepos", step: "0", x: 1265, y: 987, w: 350, h: 70, title: "Package repos",
       lines: ["PyPI · Maven · npm"],
       detail: {
         what: "Public package registries for library installs, reachable outbound via Cloud NAT. Optional if you mirror packages internally.",
@@ -250,7 +261,10 @@
     { id: "e25a", step: "2.5", d: "M1265,198 H1232 V1076 H308 V802 H350", label: "2.5 · project role", lx: 320, ly: 802, vertical: true },
     { id: "e25b", step: "2.5", d: "M1265,212 H1225 V1048 H758 V864 H720", label: "2.5 · resource role", lx: 760, ly: 864, vertical: true },
     { id: "e26", step: "2.6", d: "M1265,235 H1200 V552 H620 V516", label: "2.6 · network role → WS SA", lx: 770, ly: 548 },
-    { id: "e27", step: "2.7", d: "M1265,262 H1240 V1062 H535 V1020", label: "2.7 · CMEK MANAGED_SERVICES → WS SA", lx: 600, ly: 1082 }
+    { id: "e27", step: "2.7", d: "M1265,262 H1240 V1062 H535 V1020", label: "2.7 · CMEK MANAGED_SERVICES → WS SA", lx: 600, ly: 1082 },
+    // data access (step 3): vended UC storage-credential SAs granted GCS access on the buckets
+    { id: "e_ro", step: "3", d: "M1265,860 H1198 V786 H1160", label: "RO · objectViewer", lx: 1198, ly: 786, vertical: true },
+    { id: "e_rw", step: "3", d: "M1265,900 H1216 V878 H1160", label: "RW · objectAdmin", lx: 1216, ly: 878, vertical: true }
   ];
 
   // PSC "wires": consumer endpoint → producer service attachment. Dashed/pending when
@@ -314,6 +328,12 @@
       privileges: ["Databricks account admin"],
       creates: ["wsbuckets"], changed: ["wssa"], hideEdges: true, creatLabel: ["Workspace GCS buckets + GCE disks", "Workspace → RUNNING"],
       states: { wssa: "workspace: RUNNING" } },
+
+    { id: "3", label: "Data access — UC catalogs", short: "Data access", team: "data", repo: "data-access/",
+      narrative: "Data Platform — with the bucket owners and Cloud/Network Security — wires the running workspace to data through Unity Catalog. The account admin first grants a catalog automation SP scoped CREATE_STORAGE_CREDENTIAL / CREATE_EXTERNAL_LOCATION / CREATE_CATALOG (not metastore admin). Two storage credentials are then created, each generating its own Databricks GCP SA: the read-only credential gets objectViewer + legacyBucketReader on the existing data-lake bucket; the read-write credential gets objectAdmin on a new analytics bucket. Each SA is admitted by a VPC-SC ingress rule (read-only: read methods; read-write: all) and exposed as an external location + catalog.",
+      privileges: ["Databricks account admin (grants scoped CREATE_*)", "storage IAM admin (bucket owners)", "accesscontextmanager.policyAdmin (perimeter)"],
+      creates: ["uc"], changed: ["datalake", "analytics"], edges: ["e_ro", "e_rw"],
+      creatLabel: ["Unity Catalog: 2 storage credentials", "2 external locations + catalogs", "GCS grants: RO objectViewer · RW objectAdmin", "VPC-SC ingress rules (RO reads · RW all)"] },
 
     { id: "end", label: "End state — least privilege", short: "End state", team: null,
       narrative: "The workspace is RUNNING. The bootstrap identity is now torn down: the workspace-creator SA and its two read-only creator roles (service + host) are deleted — they were only needed to create the workspace. What remains is the least-privilege steady state — the Workspace SA with its operator roles, the Compute SA, and the CMEK key.",
@@ -581,9 +601,10 @@
     for (var si = 0; si <= maxIdx && si < steps.length; si++) {
       (steps[si].deletes || []).forEach(function (id) { toggle(elByNode[id] || elByContainer[id], false); });
     }
-    // grant edges are hidden once the workspace is finalized (2.8+) — keeps the RUNNING state clean
-    var hideE = steps[maxIdx] && steps[maxIdx].hideEdges;
-    edges.forEach(function (e) { toggle(elByEdge[e.id], !hideE && oi(e.step) <= maxIdx); });
+    // each grant edge shows only on its own step (a transient "what's granted here"
+    // annotation) — every step stays focused on its grant, and the RUNNING / data-access /
+    // End states show no grant lines.
+    edges.forEach(function (e) { toggle(elByEdge[e.id], oi(e.step) === maxIdx); });
     updateWires(maxIdx);
   }
 
