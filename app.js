@@ -440,7 +440,7 @@
     nb_scc_in:   { c: "#eb6834", d: "M1264,464 H1200 V420 H1147", m: "o", label: "" },
     nb_dispatch: { c: "#eb6834", d: "M905,428 H866 V510 H830", m: "o", vertical: true, label: "N2 · command → driver · 6666", lx: 861, ly: 500 },
     // N3 request: driver -> frontend PSC endpoint -> plproxy (workspace REST/API, 443)
-    nb_req:      { c: "#eb6834", dash: "6 4", d: "M830,458 H882 V320 H905", m: "o", label: "N3 · request table · REST/API", lx: 999, ly: 470 },
+    nb_req:      { c: "#eb6834", dash: "6 4", d: "M830,458 H882 V320 H905", m: "o", label: "N3 · request table · REST/API", lx: 768, ly: 358 },
     nb_req2:     { c: "#eb6834", dash: "6 4", d: "M1145,305 H1200 V376 H1264", m: "o", label: "" },
     nb_req3:     { c: "#eb6834", dash: "6 4", d: "M1622,376 H1632 V700 H1615", m: "o", label: "" },
     // N4 vend: UC mints a down-scoped token, up to the control plane
@@ -448,7 +448,7 @@
     nb_vend_ro:  { c: "#eb6834", d: "M1280,738 H1240 V760 H1160", m: "o", vertical: true, label: "N4 · UC mints down-scoped token", lx: 1252, ly: 812 },
     nb_vend_rw:  { c: "#eb6834", d: "M1280,858 H1240 V866 H1160", m: "o", label: "" },
     // N5 context: plproxy -> frontend PSC endpoint -> driver (REST response — no 6666)
-    nb_ctx:      { c: "#eb6834", dash: "6 4", d: "M905,340 H896 V480 H830", m: "o", label: "N5 · GCS token scoped to table paths · REST", lx: 690, ly: 394 },
+    nb_ctx:      { c: "#eb6834", dash: "6 4", d: "M905,340 H896 V480 H830", m: "o", label: "N5 · GCS token scoped to table paths · REST", lx: 999, ly: 470 },
     // N6 governed reads: executors (left VM) -> down the service/mail-data gap -> GCS buckets
     f7:    { c: "#1baf7a", d: "M548,538 V556 H764 V745 H786", m: "a", vertical: true, label: "N6 · read · RO SA", lx: 764, ly: 652, cross: [[786, 745, "ingress"]] },
     f8:    { c: "#1baf7a", d: "M568,538 V566 H752 V846 H786", m: "a", vertical: true, label: "N6 · write · RW SA", lx: 752, ly: 808, cross: [[786, 846, "ingress"]] },
@@ -487,8 +487,8 @@
       desc: "Unity Catalog verifies the querying principal holds the privilege, then mints a short-lived, path-scoped GCS token from the storage credential's vended SA (read-only or read-write). UC doesn't touch the bucket on every request, but it may reach into the data-lake / analytics buckets from time to time to validate the external location or check table state — and that access crosses the perimeter through the same VPC-SC ingress rule as the data reads.",
       flows: ["nb_vend_ro", "nb_vend_rw"], ingress: ["ing_ro", "ing_rw"], focus: ["uc", "sc_ro", "sc_rw", "datalake", "analytics"] },
     { id: "N5", title: "N5 · Cluster receives its down-scoped context", team: "data",
-      desc: "The control plane returns the table metadata + the down-scoped token to the driver over the SCC relay — again on the cluster's own outbound connection, never a new inbound path.",
-      flows: ["nb_ctx"], focus: ["controlplane", "backendpsc", "drivervm"] },
+      desc: "The control plane returns the metadata + the down-scoped GCS token to the driver as the RESPONSE to N3's request — back through plproxy → the frontend PSC endpoint (REST, 443), on the connection the driver already opened. Not a new inbound path, and not the SCC relay.",
+      flows: ["nb_ctx"], focus: ["controlplane", "frontendpsc", "drivervm"] },
     { id: "N6", title: "N6 · Governed read — Photon executes", team: "data",
       desc: "The driver hands the token to the executors; they read Mail data directly from GCS AS the vended UC storage-credential SA (never the VM's own SA), passing the VPC-SC ingress gate (identity-pinned, method-scoped, source-pinned). Photon runs the vectorized scan; results are written to the analytics bucket.",
       flows: ["f7", "f8"], focus: ["execvm", "datalake", "analytics"], pulse: ["drivervm", "execvm"] },
