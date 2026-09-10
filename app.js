@@ -319,6 +319,10 @@
           { label: "Why us-central1 is dropped", body: "2.4's calls came from Databricks' <strong>us-central1</strong> account control plane (creation is account-level); 2.8 build + runtime come from the <strong>regional</strong> control plane instead. Once the workspace exists nothing originates from us-central1 — so drop that temporary pin and keep the standing regional one." },
           { label: "Into", body: "the service project · <code>storage</code>, <code>compute</code> (create buckets / disks / instances). Identity AND source must both match." } ],
         conn: ["Admits: 2.8 storage + disk build, and runtime VM launch — all as the Workspace SA, from the regional control plane."] } },
+    { id: "ing_launch", step: "run", x: 1210, y: 515, title: "VPC-SC ingress · cluster launch",
+      detail: {
+        what: "The SAME VPC-SC ingress rule you created in step 2.8 — it admits the Workspace SA to ingress from the Databricks (regional) control plane, so the launch can create the cluster VMs inside your perimeter.",
+        note: "Cluster launch is the runtime repeat of the 2.8 build ingress — same rule, same identity (Workspace SA), same regional control-plane source." } },
     { id: "ing_ro", step: "3", x: 1210, y: 760, title: "VPC-SC ingress · data lake (RO)",
       detail: {
         what: "Admits the read-only vended UC storage-credential SA to the data-lake bucket over the Storage API — a fourth guard on top of UC + IAM + the credential.",
@@ -422,9 +426,11 @@
     // cluster launch
     l1a:   { c: "#2a78d6", d: "M270,180 H872 V305 H901", m: "b", label: "L1 · clusters/create · TLS 443", lx: 571, ly: 180, cross: [[300, 180, "B1"]] },
     l1b:   { c: "#2a78d6", d: "M1145,305 H1205 V332 H1263", m: "b", label: "", lx: 1180, ly: 300 },
-    l2:    { c: "#eb6834", d: "M1265,515 H830", m: "o", label: "L2 · GCE: launch VMs — as the Workspace SA", lx: 1047, ly: 515, cross: [[1210, 515, "B6"]] },
-    l2sa:  { c: "#eb6834", dash: "6 4", d: "M1265,655 H735 V727 H720", m: "o", label: "assigns Compute SA as VM identity", lx: 975, ly: 655 },
-    boot:  { c: "#eb6834", dash: "6 4", d: "M480,560 V540", m: "o", label: "boot Runtime + Photon", lx: 545, ly: 556 },
+    l2:     { c: "#eb6834", d: "M1265,515 H830", m: "o", label: "L2 · GCE: launch VMs — as the Workspace SA", lx: 1047, ly: 515 },
+    l2wssa: { c: "#eb6834", dash: "6 4", d: "M1265,250 H1225 V515 H1210", m: "o", label: "" },
+    l2csa:  { c: "#eb6834", dash: "6 4", d: "M350,727 H316 V568 H585 V538", m: "o", vertical: true, label: "Workspace SA assigns Compute SA as VM identity", lx: 316, ly: 648 },
+    l2cmek: { c: "#eb6834", dash: "6 4", d: "M720,994 H740 V568 H615 V538", m: "o", vertical: true, label: "disks come up CMEK encrypted", lx: 740, ly: 781 },
+    boot:   { c: "#eb6834", dash: "6 4", d: "M480,560 V540", m: "o", label: "boot Runtime + Photon", lx: 545, ly: 556 },
     tunnel:{ c: "#c3c2b7", dash: "4 3", d: "M450,420 V393", m: "g", label: "resolve tunnel.<region>", lx: 462, ly: 410 },
     l3:    { c: "#eb6834", d: "M860,505 H882 V405 H901", m: "o", label: "L3 · 6666", lx: 874, ly: 470 },
     b3:    { c: "#eb6834", d: "M1145,405 H1205 V432 H1263", m: "o", label: "B3", lx: 1180, ly: 400, cross: [[1205, 405, "B3"]] },
@@ -447,8 +453,8 @@
       desc: "POST /api/2.x/clusters/create over TLS 443 crosses the perimeter and the frontend PSC wire to the control-plane cluster manager. Auth = Okta session / PAT.",
       flows: ["l1a", "l1b"], focus: ["admin", "frontendpsc", "plproxy", "controlplane"] },
     { id: "L2", title: "L2 · Cluster manager launches VMs", team: "data",
-      desc: "Acting AS the Workspace SA (control-plane-owned launcher), the cluster manager calls the GCE API to create driver + executor VMs in the service project with CMEK-encrypted disks (crosses B6). It assigns the Compute SA as the VMs' identity — the VMs boot as the Compute SA, never the Workspace SA.",
-      flows: ["l2", "l2sa", "boot"], reveal: ["drivervm", "execvm"], focus: ["controlplane", "computesa", "drivervm", "execvm", "kms"] },
+      desc: "Acting AS the Workspace SA (control-plane-owned launcher), the cluster manager calls the GCE API to create driver + executor VMs in the service project with CMEK-encrypted disks. It assigns the Compute SA as the VMs' identity — the VMs boot as the Compute SA, never the Workspace SA. The launch crosses the perimeter through the VPC-SC ingress rule created at 2.8 (Workspace SA, from the regional control plane).",
+      flows: ["l2", "l2wssa", "l2csa", "l2cmek", "boot"], ingress: ["ing_launch"], reveal: ["drivervm", "execvm"], focus: ["controlplane", "computesa", "drivervm", "execvm", "kms"] },
     { id: "L3", title: "L3 · Cluster dials home (SCC relay)", team: "data",
       desc: "The VMs resolve tunnel.<region> in the private DNS zone, open TCP 6666 outbound to the backend endpoint → ngrok attachment (B3). The cluster registers and reaches RUNNING. No inbound path to the cluster exists.",
       flows: ["tunnel", "l3", "b3"], focus: ["drivervm", "backendpsc", "ngrok"], run: "RUNNING" }
@@ -589,8 +595,9 @@
     // label
     if (f.label) {
       var lw = f.label.length * fs(6.1) + 16;
-      E("rect", { x: f.lx - lw / 2, y: f.ly - fs(11.5), width: lw, height: fs(17), rx: 10, fill: "#fff", stroke: f.c }, g);
-      txt(g, f.lx, f.ly, f.label, { "font-size": fs(11), "font-weight": 600, "text-anchor": "middle", fill: f.c });
+      var lg = f.vertical ? E("g", { transform: "rotate(-90 " + f.lx + " " + f.ly + ")" }, g) : g;
+      E("rect", { x: f.lx - lw / 2, y: f.ly - fs(11.5), width: lw, height: fs(17), rx: 10, fill: "#fff", stroke: f.c }, lg);
+      txt(lg, f.lx, f.ly, f.label, { "font-size": fs(11), "font-weight": 600, "text-anchor": "middle", fill: f.c });
     }
     // crossings
     (f.cross || []).forEach(function (cr) {
@@ -834,6 +841,7 @@
       });
     }
     var st = list[idx];
+    (st.ingress || []).forEach(function (id) { if (elByIngress[id]) elByIngress[id].classList.add("show"); });
     if (st.run) { setPill("backendpsc", "ACCEPTED"); }
     if (st.pulse) st.pulse.forEach(function (id) { var g = elByNode[id]; if (g) g.classList.add("selected"); });
     focusNodes(st.focus);
@@ -930,6 +938,7 @@
       h += '</ul>';
     }
     if (d.repo) h += '<p class="note">Repo config: <code>' + d.repo + '</code></p>';
+    if (d.note) h += '<p class="note">' + d.note + '</p>';
     h += '<p class="muted">Appears: ' + (n.step === "run" ? "at cluster launch" : (n.step === "0" ? "already exists" : "step " + n.step)) + '</p>';
     p.innerHTML = h;
   }
