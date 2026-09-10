@@ -433,14 +433,20 @@
     tunnel:{ c: "#8a8880", dash: "4 3", d: "M450,420 V393", m: "g", label: "resolve tunnel.<region>", lx: 462, ly: 410 },
     l3:    { c: "#eb6834", d: "M860,505 H882 V405 H901", m: "o", label: "L3 · 6666", lx: 874, ly: 470 },
     b3:    { c: "#eb6834", d: "M1145,405 H1205 V432 H1263", m: "o", label: "" },
-    // notebook runtime
-    n1:    { c: "#2a78d6", d: "M270,180 H872 V305 H901", m: "b", label: "F1 · notebook command · TLS 443", lx: 571, ly: 180, cross: [[300, 180, "B1"]] },
-    n1b:   { c: "#2a78d6", d: "M1145,305 H1205 V332 H1263", m: "b", label: "", lx: 1180, ly: 300 },
-    n2:    { c: "#eb6834", d: "M860,470 H884 V300 H901", m: "o", label: "F4 · UC metadata + token · 443", lx: 690, ly: 444 },
-    f5:    { c: "#eb6834", dash: "6 4", d: "M860,525 H872 V405 H901", m: "o", label: "F5 · SCC relay · 6666", lx: 690, ly: 592 },
-    f7:    { c: "#1baf7a", d: "M728,538 V745 H784", m: "a", label: "F7 · read (UC RO SA)", lx: 515, ly: 690, cross: [[786, 745, "ingress"]] },
-    f8:    { c: "#1baf7a", d: "M745,538 V846 H784", m: "a", label: "F8 · write (UC RW SA)", lx: 515, ly: 712, cross: [[786, 846, "ingress"]] },
-    ret:   { c: "#2a78d6", dash: "5 4", d: "M901,320 H860 V472 H832", m: "b", label: "results → analyst (nothing data-bearing via control plane)", lx: 690, ly: 700 },
+    // notebook runtime — analyst rides the frontend wire (443); cluster<->control plane rides the SCC relay (6666)
+    n1:    { c: "#2a78d6", d: "M270,180 H872 V305 H901", m: "b", label: "N1 · notebook command · TLS 443", lx: 571, ly: 180, cross: [[300, 180, "B1"]] },
+    n1b:   { c: "#2a78d6", d: "M1145,305 H1205 V332 H1263", m: "b", label: "" },
+    // N2 command dispatch: control plane -> driver over the SCC relay (on the cluster's own outbound connection)
+    nb_dispatch: { c: "#eb6834", d: "M901,388 H882 V452 H860", m: "o", label: "N2 · command → driver · 6666", lx: 700, ly: 360 },
+    // N3 request: driver -> control plane (UC) over the SCC relay
+    nb_req:      { c: "#eb6834", dash: "6 4", d: "M860,472 H874 V406 H901", m: "o", label: "N3 · request table · 6666", lx: 700, ly: 384 },
+    // N4 vend: UC mints a down-scoped token, up to the control plane
+    nb_vend:     { c: "#eb6834", d: "M1265,700 H1250 V540 H1265", m: "o", vertical: true, label: "N4 · UC mints down-scoped token", lx: 1250, ly: 620 },
+    // N5 context: control plane -> driver over the SCC relay
+    nb_ctx:      { c: "#eb6834", dash: "6 4", d: "M901,428 H866 V496 H860", m: "o", label: "N5 · down-scoped context · 6666", lx: 700, ly: 408 },
+    f7:    { c: "#1baf7a", d: "M728,538 V745 H784", m: "a", label: "N6 · read · RO SA", lx: 515, ly: 690, cross: [[786, 745, "ingress"]] },
+    f8:    { c: "#1baf7a", d: "M745,538 V846 H784", m: "a", label: "N6 · write · RW SA", lx: 515, ly: 712, cross: [[786, 846, "ingress"]] },
+    ret:   { c: "#2a78d6", dash: "5 4", d: "M901,320 H860 V472 H832", m: "b", label: "N7 · results → analyst · 443", lx: 690, ly: 700 },
     // 2.4 read-only "verify settings" sub-animation (Account API, via the creator role)
     v_net:  { c: "#8a8880", dash: "5 4", d: "M1265,610 H1216 V332 H1149", m: "g", label: "verify · network / PSC (read-only)", lx: 1120, ly: 600 },
     v_svc:  { c: "#8a8880", dash: "5 4", d: "M1265,640 H1210 V1068 H648 V1040", m: "g", label: "verify · service project (read-only)", lx: 860, ly: 1063 },
@@ -461,16 +467,25 @@
 
   var notebookStages = [
     { id: "N1", title: "N1 · Analyst submits a command", team: "data",
-      desc: "A notebook cell / SQL query goes from the analyst's browser over the frontend PSC wire (F1) to the workspace — the cluster is already RUNNING. Okta/OIDC auth happens on a back-channel, not on this wire.",
+      desc: "A notebook cell / SQL query goes from the analyst's browser over the frontend PSC wire (443) to the workspace — the cluster is already RUNNING. Okta/OIDC auth is on a back-channel, not this wire.",
       flows: ["n1", "n1b"], reveal: ["drivervm", "execvm"], focus: ["admin", "frontendpsc", "plproxy", "controlplane"] },
-    { id: "N2", title: "N2 · Driver gets context + a down-scoped token", team: "data",
-      desc: "The running cluster calls the control plane over the frontend wire (F4) for UC metadata and a down-scoped storage token. The SCC relay (F5, TCP 6666) is the always-cluster-initiated control channel.",
-      flows: ["n2", "f5"], focus: ["drivervm", "controlplane", "backendpsc"] },
-    { id: "N3", title: "N3 · Governed read — Photon executes", team: "data",
-      desc: "Executors read Mail data AS the vended UC storage-credential SA (never the VM's own SA), passing the VPC-SC ingress gate (identity-pinned, method-scoped, source-pinned). Photon runs the vectorized scan; results are written to the analytics bucket.",
+    { id: "N2", title: "N2 · Control plane dispatches the command to the driver", team: "data",
+      desc: "The control plane can't connect IN to the cluster (no public IP, no inbound). It places the command on the SCC relay (TCP 6666, backend PSC → ngrok), and the driver picks it up over the outbound connection it opened at launch — the channel L3 built. Nothing connects inward.",
+      flows: ["nb_dispatch"], focus: ["controlplane", "backendpsc", "ngrok", "drivervm"] },
+    { id: "N3", title: "N3 · Driver asks UC for the table", team: "data",
+      desc: "Executing the command, the driver needs to read a table, so it calls Unity Catalog (control plane) over the same SCC relay (6666), asking to read the external location.",
+      flows: ["nb_req"], focus: ["drivervm", "backendpsc", "controlplane"] },
+    { id: "N4", title: "N4 · UC checks the grant & vends a down-scoped token", team: "data",
+      desc: "Unity Catalog verifies the querying principal holds the privilege, then uses the storage credential's vended GCP SA to mint a short-lived, path-scoped GCS token — read-only or read-write per the credential. No standing key leaves UC.",
+      flows: ["nb_vend"], focus: ["controlplane", "sc_ro", "sc_rw"] },
+    { id: "N5", title: "N5 · Cluster receives its down-scoped context", team: "data",
+      desc: "The control plane returns the table metadata + the down-scoped token to the driver over the SCC relay — again on the cluster's own outbound connection, never a new inbound path.",
+      flows: ["nb_ctx"], focus: ["controlplane", "backendpsc", "drivervm"] },
+    { id: "N6", title: "N6 · Governed read — Photon executes", team: "data",
+      desc: "The driver hands the token to the executors; they read Mail data directly from GCS AS the vended UC storage-credential SA (never the VM's own SA), passing the VPC-SC ingress gate (identity-pinned, method-scoped, source-pinned). Photon runs the vectorized scan; results are written to the analytics bucket.",
       flows: ["f7", "f8"], focus: ["execvm", "datalake", "analytics"], pulse: ["drivervm", "execvm"] },
-    { id: "N4", title: "N4 · Results return to the analyst", team: "data",
-      desc: "Results return over the frontend PSC wire. The control plane sees metadata and query text (CMEK-encrypted) — never the data itself. The data never leaves the perimeter.",
+    { id: "N7", title: "N7 · Results return to the analyst", team: "data",
+      desc: "Results return over the frontend PSC wire (443). The control plane sees metadata + query text (CMEK-encrypted) — never the data itself. The data never leaves the perimeter.",
       flows: ["ret"], focus: ["admin", "drivervm"] }
   ];
 
