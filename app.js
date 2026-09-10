@@ -448,7 +448,7 @@
     nb_vend_ro:  { c: "#eb6834", d: "M1280,738 H1240 V760 H1160", m: "o", vertical: true, label: "N4 · UC mints down-scoped token", lx: 1252, ly: 812 },
     nb_vend_rw:  { c: "#eb6834", d: "M1280,858 H1240 V866 H1160", m: "o", label: "" },
     // N5 context: plproxy -> frontend PSC endpoint -> driver (REST response — no 6666)
-    nb_ctx:      { c: "#eb6834", dash: "6 4", d: "M905,340 H896 V480 H830", m: "o", label: "N5 · GCS token scoped to table paths · REST", lx: 999, ly: 470 },
+    nb_ctx:      { c: "#eb6834", dash: "6 4", d: "M905,340 H896 V480 H830", m: "o", label: "N5 · GCS token scoped to table paths · REST", lx: 1061, ly: 489 },
     // N6 governed reads: executors (left VM) -> down the service/mail-data gap -> GCS buckets
     f7:    { c: "#1baf7a", d: "M548,538 V556 H764 V745 H786", m: "a", vertical: true, label: "N6 · read · RO SA", lx: 764, ly: 652, cross: [[786, 745, "ingress"]] },
     f8:    { c: "#1baf7a", d: "M568,538 V566 H752 V846 H786", m: "a", vertical: true, label: "N6 · write · RW SA", lx: 752, ly: 808, cross: [[786, 846, "ingress"]] },
