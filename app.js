@@ -284,11 +284,12 @@
       creates: ["kms"], creatLabel: ["CMEK key (STORAGE agent grants)"] },
 
     { id: "2.4", label: "Create workspace — PHASE 1", short: "Workspace (PROVISIONING)", team: "data", repo: "workspace/ (finalize=false)",
-      narrative: "Data Platform, as the account admin, registers the CMEK key, the two PSC endpoints (which flips them PENDING → ACCEPTED), the private access settings, and the network config — then creates the workspace paused in PROVISIONING. Databricks mints and returns the Workspace SA without building any GCS/GCE yet.",
+      narrative: "Data Platform, with the workspace-creator SA, registers the CMEK key, the two PSC endpoints (which flips them PENDING → ACCEPTED), the private access settings, and the network config — then creates the workspace paused in PROVISIONING. Databricks mints and returns the Workspace SA without building any GCS/GCE yet.",
       privileges: ["Databricks account admin", "read-only creator roles (2.1 + 2.2)"],
       creates: ["wssa"], creatLabel: ["Workspace SA (minted, returned)", "PSC endpoints → ACCEPTED", "Private access settings · network config"],
+      changed: ["frontendpsc", "backendpsc"],
       states: { frontendpsc: "ACCEPTED", backendpsc: "ACCEPTED", wssa: "workspace: PROVISIONING" },
-      flows: ["v_net", "v_svc", "v_cmek"], pulse: ["service", "frontendpsc", "backendpsc", "kms"],
+      flows: ["v_net", "v_svc", "v_cmek"], pulse: ["service", "kms"],
       substep: "Sub-step: using the read-only creator roles from 2.1/2.2, the Account API first reaches into the service project, the host network/PSC, and the CMEK key to validate settings — read-only — before it creates anything." },
 
     { id: "2.5", label: "Workspace-SA operator roles", short: "Operator roles", team: "iam", repo: "workspace-sa-roles/",
@@ -299,18 +300,18 @@
     { id: "2.6", label: "Post-workspace config", short: "Network role + DNS", team: "network", repo: "post-workspace/",
       narrative: "Network Engineering grants the Workspace SA the custom network role (subnetworks.get/use) on the node subnet so it can place VMs across the Shared-VPC boundary, and writes the four DNS A-records into the zone so workspace hostnames resolve to the private PSC IPs.",
       privileges: ["compute.networkAdmin", "dns.admin", "iam.roleAdmin"],
-      creates: ["netrole"], edges: ["e26"], creatLabel: ["Network role → Workspace SA (node subnet)", "4 DNS A-records"],
+      creates: ["netrole"], changed: ["dnszone"], edges: ["e26"], creatLabel: ["Network role → Workspace SA (node subnet)", "4 DNS A-records"],
       states: { dnszone: "records" } },
 
     { id: "2.7", label: "MANAGED_SERVICES CMEK grant", short: "CMEK grant", team: "security", repo: "cmek-workspace-grant/",
       narrative: "Cloud Security grants the Workspace SA cryptoKeyEncrypterDecrypter on the CMEK key — the MANAGED_SERVICES half — so control-plane data (notebook source, results, secrets, SQL history) is encrypted with the customer key.",
       privileges: ["cloudkms.admin  (service project)"],
-      creates: [], edges: ["e27"], creatLabel: ["CMEK encrypt/decrypt → Workspace SA"] },
+      creates: [], changed: ["kms"], edges: ["e27"], creatLabel: ["CMEK encrypt/decrypt → Workspace SA"] },
 
     { id: "2.8", label: "Finalize — PHASE 2", short: "Workspace RUNNING", team: "data", repo: "workspace/ (finalize=true)",
       narrative: "Data Platform re-applies with finalize=true. expected_workspace_status flips to RUNNING; the now-authorized Workspace SA provisions the workspace GCS buckets + GCE disks (CMEK-encrypted). The workspace is assigned to the metastore and reaches RUNNING.",
       privileges: ["Databricks account admin"],
-      creates: ["wsbuckets"], creatLabel: ["Workspace GCS buckets + GCE disks", "Workspace → RUNNING"],
+      creates: ["wsbuckets"], changed: ["wssa"], creatLabel: ["Workspace GCS buckets + GCE disks", "Workspace → RUNNING"],
       states: { wssa: "workspace: RUNNING" } }
   ];
 
@@ -423,8 +424,8 @@
       elByNode[n.id] = g; return;
     }
     E("rect", { class: "box", x: n.x, y: n.y, width: n.w, height: n.h, rx: 8,
-      fill: "#ffffff", stroke: n.optional ? "#b98b00" : (n.accent ? "#eb6834" : "#e1e0d9"),
-      "stroke-width": (n.optional || n.accent) ? 1.5 : 1,
+      fill: "#ffffff", stroke: n.optional ? "#b98b00" : "#e1e0d9",
+      "stroke-width": n.optional ? 1.5 : 1,
       "stroke-dasharray": n.optional ? "6 4" : "0" }, g);
     if (n.optional) {
       var ow = 68;
@@ -575,8 +576,8 @@
     Object.keys(elByFlow).forEach(function (k) { elByFlow[k].g.remove(); delete elByFlow[k]; });
   }
   function clearFocus() {
-    nodes.forEach(function (n) { if (elByNode[n.id]) elByNode[n.id].classList.remove("dim", "selected", "pulsing"); });
-    containers.forEach(function (c) { if (elByContainer[c.id]) elByContainer[c.id].classList.remove("dim", "selected"); });
+    nodes.forEach(function (n) { if (elByNode[n.id]) elByNode[n.id].classList.remove("dim", "selected", "pulsing", "created"); });
+    containers.forEach(function (c) { if (elByContainer[c.id]) elByContainer[c.id].classList.remove("dim", "selected", "created"); });
   }
 
   function animateFlow(id, delay) {
@@ -663,11 +664,12 @@
     clearFlows(); clearFocus();
     showDeployNodes(idx);
     applyDeployStates(idx);
-    // appear-animate nodes/edges introduced at this step
+    // appear-animate + green-highlight what this step creates; green-highlight what it changes
     var s = steps[idx];
-    (s.creates || []).forEach(function (id) { toggle(elByNode[id] || elByContainer[id], true, true); });
+    (s.creates || []).forEach(function (id) { var g = elByNode[id] || elByContainer[id]; toggle(g, true, true); if (g) g.classList.add("created"); });
+    (s.changed || []).forEach(function (id) { var g = elByNode[id] || elByContainer[id]; if (g) g.classList.add("created"); });
     (s.edges || []).forEach(function (id) { toggle(elByEdge[id], true, true); });
-    // pulse the components this step touches / validates
+    // pulse (orange) the components this step validates read-only (2.4 verify)
     (s.pulse || []).forEach(function (id) { var g = elByNode[id] || elByContainer[id]; if (g) g.classList.add("selected"); });
     // step-scoped action flows (e.g. 2.4 read-only verify) — animated, cleared on step change
     if (s.flows) { var d = 0; s.flows.forEach(function (fid) { animateFlow(fid, 90 + d); d += 220; }); }
@@ -738,7 +740,7 @@
   function renderLegend() {
     var L = document.getElementById("legend");
     var sets = {
-      deploy: [["line", "#d03b3b", "VPC-SC boundary", "8 5"], ["line", "#eb6834", "identity / grant edge", "5 4"], ["dot", "#1baf7a", "created this step"], ["dot", "#e0b25a", "pending"]],
+      deploy: [["line", "#d03b3b", "VPC-SC boundary", "8 5"], ["line", "#eb6834", "grant edge", "5 4"], ["dot", "#0b7a54", "created / changed this step"], ["dot", "#e0b25a", "pending"]],
       launch: [["line", "#2a78d6", "user access"], ["line", "#eb6834", "control plane / launch"], ["line", "#c3c2b7", "DNS / boot", "4 3"], ["dot", "#d03b3b", "boundary crossing"]],
       notebook: [["line", "#2a78d6", "user access"], ["line", "#eb6834", "control plane"], ["line", "#1baf7a", "data plane (governed read)"], ["dot", "#d03b3b", "VPC-SC crossing"]]
     };

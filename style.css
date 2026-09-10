@@ -167,10 +167,13 @@ body {
 .node .box { transition: stroke .3s, fill .3s; }
 .node.appear .box { animation: pop .6s ease; }
 .node.clickable { cursor: pointer; }
+/* green = created/changed at the current step (persistent while the step is selected) */
+.node.created .box { stroke: var(--green); stroke-width: 2.75; }
+/* orange = user selection / read-only verify pulse (takes precedence over green) */
 .node.selected .box { stroke: var(--accent) !important; stroke-width: 2.5 !important; }
 @keyframes pop {
-  0% { stroke: var(--accent); }
-  60% { stroke: var(--accent); }
+  0% { stroke: var(--green); }
+  60% { stroke: var(--green); }
   100% {}
 }
 .node.appear { animation: fadepop .6s ease; }
