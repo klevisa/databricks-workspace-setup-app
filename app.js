@@ -60,7 +60,7 @@
     // Databricks-owned side
     { id: "wssa", step: "2.4", x: 1265, y: 180, w: 350, h: 95, title: "Workspace SA", accent: true,
       lines: ["The launcher (control-plane-owned)"],
-      identity: "IDENTITY · the launcher — never the VMs' runtime identity",
+      identity: ["IDENTITY", "cluster launcher"],
       detail: {
         what: "Databricks-owned service account, minted when the workspace is created (2.4). The control plane acts AS this SA to build and run the workspace — it launches cluster VMs and creates the workspace storage. It is never what the VMs run as.",
         extra: [
@@ -98,7 +98,7 @@
         owner: "network",
         conn: ["Zone created in 2.2 (no records yet)", "4 A-records written in 2.6"],
         repo: "network/ · post-workspace/" } },
-    { id: "routernat", step: "2.2", x: 620, y: 235, w: 230, h: 110, title: "Cloud Router + NAT",
+    { id: "routernat", step: "2.2", x: 620, y: 235, w: 262, h: 110, title: "Cloud Router + NAT",
       optional: true, lines: ["Outbound only — package installs"],
       detail: {
         what: "Optional egress path for public package installs (PyPI/Maven/npm). Outbound only. Removable if you mirror packages internally.",
@@ -108,7 +108,7 @@
     // held by the same workspace-creator SA that lives in the service project.
     { id: "crole_host", step: "2.2", x: 895, y: 463, w: 260, h: 82, title: "Creator role · host",
       lines: ["Read-only settings validation"],
-      identity: ["IDENTITY · held by the", "workspace-creator SA"],
+      identity: ["IDENTITY", "held by the workspace-creator SA"],
       detail: {
         what: "Read-only custom role on the HOST project. It lets the workspace-creator SA validate host-network settings during workspace creation — it grants no create/modify power.",
         owner: "network",
@@ -158,7 +158,7 @@
     // The workspace-creator SA lives in the service project (bhavink convention). It is
     // granted TWO read-only per-project custom roles — this service role, plus the host
     // role (separate box in the host project). Those two roles are its read access.
-    { id: "creatorsa", step: "2.1", x: 790, y: 618, w: 370, h: 60, title: "Workspace-creator SA", accent: true,
+    { id: "creatorsa", step: "2.1", x: 790, y: 618, w: 370, h: 74, title: "Workspace-creator SA", accent: true,
       lines: ["Impersonated to create the workspace (2.4)"],
       identity: "IDENTITY · holds the two read-only creator roles",
       detail: {
@@ -247,9 +247,9 @@
   // grant edges from the Workspace SA into the perimeter. Routed via the right gap +
   // bottom corridor so they never cross the Yahoo Mail data projects frame.
   var edges = [
-    { id: "e25a", step: "2.5", d: "M1265,286 H1232 V1076 H308 V802 H350", label: "2.5 · project role", lx: 320, ly: 802, vertical: true },
-    { id: "e25b", step: "2.5", d: "M1265,278 H1225 V1048 H758 V864 H720", label: "2.5 · resource role", lx: 760, ly: 864, vertical: true },
-    { id: "e26", step: "2.6", d: "M1265,250 H1192 V540 H862", label: "2.6 · network role → WS SA", lx: 1015, ly: 532 },
+    { id: "e25a", step: "2.5", d: "M1265,198 H1232 V1076 H308 V802 H350", label: "2.5 · project role", lx: 320, ly: 802, vertical: true },
+    { id: "e25b", step: "2.5", d: "M1265,212 H1225 V1048 H758 V864 H720", label: "2.5 · resource role", lx: 760, ly: 864, vertical: true },
+    { id: "e26", step: "2.6", d: "M1265,235 H1200 V552 H620 V516", label: "2.6 · network role → WS SA", lx: 770, ly: 548 },
     { id: "e27", step: "2.7", d: "M1265,262 H1240 V1062 H535 V1020", label: "2.7 · CMEK MANAGED_SERVICES → WS SA", lx: 600, ly: 1082 }
   ];
 
@@ -343,7 +343,7 @@
     ret:   { c: "#2a78d6", dash: "5 4", d: "M901,320 H860 V472 H832", m: "b", label: "results → analyst (nothing data-bearing via control plane)", lx: 690, ly: 700 },
     // 2.4 read-only "verify settings" sub-animation (Account API, via the creator role)
     v_net:  { c: "#8a8880", dash: "5 4", d: "M1265,700 H1216 V332 H1149", m: "g", label: "verify · network / PSC (read-only)", lx: 1120, ly: 700 },
-    v_svc:  { c: "#8a8880", dash: "5 4", d: "M1265,758 H1210 V1055 H648 V1040", m: "g", label: "verify · service project (read-only)", lx: 830, ly: 1050 },
+    v_svc:  { c: "#8a8880", dash: "5 4", d: "M1265,758 H1210 V1068 H648 V1040", m: "g", label: "verify · service project (read-only)", lx: 860, ly: 1063 },
     v_cmek: { c: "#8a8880", dash: "5 4", d: "M1265,772 H1200 V1078 H318 V994 H350", m: "g", label: "verify · CMEK (read-only)", lx: 430, ly: 1088 }
   };
 
