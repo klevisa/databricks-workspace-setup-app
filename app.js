@@ -438,7 +438,7 @@
     n1b:   { c: "#2a78d6", d: "M1145,305 H1200 V376 H1264", m: "b", label: "" },
     // N2 command dispatch: ngrok -> backend PSC endpoint -> DRIVER (right VM), over the SCC relay (6666)
     nb_scc_in:   { c: "#eb6834", d: "M1264,464 H1200 V420 H1147", m: "o", label: "" },
-    nb_dispatch: { c: "#eb6834", d: "M905,428 H866 V510 H830", m: "o", vertical: true, label: "N2 · command → driver · 6666", lx: 861, ly: 500 },
+    nb_dispatch: { c: "#eb6834", d: "M905,428 H866 V510 H830", m: "o", label: "N2 · command → driver · 6666", lx: 976, ly: 455 },
     // N3 request: driver -> frontend PSC endpoint -> plproxy (workspace REST/API, 443)
     nb_req:      { c: "#eb6834", dash: "6 4", d: "M830,458 H882 V320 H905", m: "o", label: "N3 · request table · REST/API", lx: 768, ly: 358 },
     nb_req2:     { c: "#eb6834", dash: "6 4", d: "M1145,305 H1200 V376 H1264", m: "o", label: "" },
@@ -454,6 +454,7 @@
     f8:    { c: "#1baf7a", d: "M568,538 V566 H752 V846 H786", m: "a", vertical: true, label: "N6 · write · RW SA", lx: 752, ly: 808, cross: [[786, 846, "ingress"]] },
     // N7 results: executors -> driver (processed dataset), then driver -> frontend PSC -> plproxy -> analyst
     nb_exec_ret: { c: "#2a78d6", dash: "5 4", d: "M590,498 H610", m: "b", label: "processed dataset", lx: 600, ly: 432 },
+    nb_pd_lead:  { c: "#2a78d6", dash: "2 3", d: "M600,497 V441", label: "" },
     ret:   { c: "#2a78d6", dash: "5 4", d: "M830,502 H872 V306 H905", m: "b", label: "N7 · results → analyst · 443", lx: 690, ly: 418 },
     // 2.4 read-only "verify settings" sub-animation (Account API, via the creator role)
     v_net:  { c: "#8a8880", dash: "5 4", d: "M1265,610 H1216 V332 H1149", m: "g", label: "verify · network / PSC (read-only)", lx: 1120, ly: 600 },
@@ -494,7 +495,7 @@
       flows: ["f7", "f8"], focus: ["execvm", "datalake", "analytics"], pulse: ["drivervm", "execvm"] },
     { id: "N7", title: "N7 · Results return to the analyst", team: "data",
       desc: "The executors send the processed dataset to the driver; the driver returns results over the frontend PSC wire → plproxy → analyst (443). The control plane sees metadata + query text (CMEK-encrypted) — never the data itself. The data never leaves the perimeter.",
-      flows: ["nb_exec_ret", "ret"], focus: ["admin", "drivervm", "execvm"] }
+      flows: ["nb_exec_ret", "nb_pd_lead", "ret"], focus: ["admin", "drivervm", "execvm"] }
   ];
 
   /* ================= rendering ================= */
@@ -611,8 +612,8 @@
   function drawFlow(id) {
     var f = flows[id];
     var g = E("g", { class: "flowg", "data-flow": id }, layF);
-    var p = E("path", { class: "flow draw", d: f.d, stroke: f.c, "stroke-width": 2.6, fill: "none",
-      "marker-end": "url(#arr-" + f.m + ")" }, g);
+    var p = E("path", { class: "flow draw", d: f.d, stroke: f.c, "stroke-width": 2.6, fill: "none" }, g);
+    if (f.m) p.setAttribute("marker-end", "url(#arr-" + f.m + ")");
     if (f.dash) p.setAttribute("stroke-dasharray", f.dash);
     // label — drawn in the flow-label layer (above connectors) so lines never cover it
     var lab = null;
