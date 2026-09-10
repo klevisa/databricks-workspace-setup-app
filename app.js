@@ -97,7 +97,7 @@
       lines: ["Provisioning + IdP sync"],
       detail: {
         what: "The account-level control plane at accounts.gcp.databricks.com. It provisions workspaces and syncs identities.",
-        conn: ["Workspace provisioning (creates the workspace in 2.4)", "IdP sync: Okta → Account API", "Auth: account admin via Google OIDC tokens"] } },
+        conn: ["Workspace provisioning (creates the workspace in 2.4)", "IdP sync: Okta → Account API"] } },
     // Unity Catalog objects (inside the uc frame), created at step 3.
     { id: "sc_ro", step: "3", x: 1280, y: 712, w: 320, h: 52, title: "Storage credential · source_data_ro",
       lines: [], identity: "IDENTITY · vended Databricks GCP SA (RO)",
@@ -293,6 +293,36 @@
     { id: "e_el_rw", step: "3", until: "3", color: "#2a78d6", marker: "b", d: "M1280,918 H1226 V902 H1160", label: "" }
   ];
 
+  /* ---------------- VPC-SC ingress points (blinking markers ON the perimeter border) ----------------
+     Each marks where a Databricks-owned identity crosses INTO Yahoo's VPC-SC perimeter to reach a
+     protected resource. Clickable for detail (incl. source-pinning). Shown from their step onward. */
+  var ingress = [
+    { id: "ing_ws", step: "2.4", x: 1210, y: 626, title: "VPC-SC ingress · workspace",
+      detail: {
+        what: "The foundational VPC-SC ingress rule that admits Databricks into your perimeter to build and run the workspace — without it, VPC Service Controls blocks these calls even though IAM allows them.",
+        extra: [
+          { label: "Source-pinned to", body: "Databricks' region-specific control-plane project numbers (from the ip-domain-region list) — not ANY_IDENTITY." },
+          { label: "Into", body: "the host + service projects · <code>storage</code>, <code>compute</code>, <code>cloudkms</code>, <code>serviceusage</code>." } ],
+        conn: ["Admits: 2.4 settings validation · 2.7 CMEK ops · 2.8 bucket/disk/SA creation · runtime VM launch (as the Workspace SA)"],
+        note: "In this playbook the perimeter is customer-supplied, so this ingress is a prerequisite set on your existing perimeter — not created by workspace-setup/." } },
+    { id: "ing_ro", step: "3", x: 1210, y: 760, title: "VPC-SC ingress · data lake (RO)",
+      detail: {
+        what: "Admits the read-only vended UC storage-credential SA to the data-lake bucket over the Storage API — a fourth guard on top of UC + IAM + the credential.",
+        extra: [
+          { label: "Identity", body: "the RO storage credential's vended Databricks GCP SA." },
+          { label: "Methods", body: "read only — <code>objects.get</code> / <code>objects.list</code>." },
+          { label: "Source-pinned to", body: "Databricks control-plane project numbers — plus serverless-compute project numbers, so serverless can read too." } ],
+        repo: "data-access/catalog-readonly.tf" } },
+    { id: "ing_rw", step: "3", x: 1210, y: 866, title: "VPC-SC ingress · analytics (RW)",
+      detail: {
+        what: "Admits the read-write vended UC storage-credential SA to the analytics bucket over the Storage API.",
+        extra: [
+          { label: "Identity", body: "the RW storage credential's vended Databricks GCP SA." },
+          { label: "Methods", body: "all storage methods (read + write)." },
+          { label: "Source-pinned to", body: "Databricks control-plane + serverless-compute project numbers." } ],
+        repo: "data-access/catalog-readwrite.tf" } }
+  ];
+
   // PSC "wires": consumer endpoint → producer service attachment. Dashed/pending when
   // the endpoints are first created (2.2); solid once registered → ACCEPTED (2.4).
   var pscWires = [
@@ -422,7 +452,7 @@
 
   /* ================= rendering ================= */
   var svg = document.getElementById("canvas");
-  var elByNode = {}, elByContainer = {}, elByEdge = {}, elByFlow = {}, elByWire = {}, BASE = {};
+  var elByNode = {}, elByContainer = {}, elByEdge = {}, elByFlow = {}, elByWire = {}, elByIngress = {}, BASE = {};
 
   function E(tag, attrs, parent) {
     var el = document.createElementNS(SVGNS, tag);
@@ -509,6 +539,14 @@
     elByNode[n.id] = g;
   }
 
+  function drawIngress(ing) {
+    var g = E("g", { class: "ingressg clickable", "data-step": ing.step, "data-id": ing.id }, layI);
+    E("circle", { class: "ingress-halo", cx: ing.x, cy: ing.y, r: 11, fill: "#d03b3b" }, g);
+    E("circle", { class: "ingress-dot", cx: ing.x, cy: ing.y, r: 9, fill: "#d03b3b", stroke: "#fff", "stroke-width": 2 }, g);
+    g.addEventListener("click", function () { selectNode(ing.id); });
+    elByIngress[ing.id] = g;
+  }
+
   function drawEdge(e) {
     var ec = e.color || "#eb6834", em = e.marker || "o";
     var g = E("g", { class: "flowg", "data-step": e.step }, layE);
@@ -561,7 +599,7 @@
   }
 
   // layers
-  var layC, layE, layW, layN, layF;
+  var layC, layE, layW, layN, layF, layI;
   function renderAll() {
     buildDefs();
     E("rect", { x: 0, y: 0, width: 1680, height: 1160, fill: "#fcfcfb" }, svg);
@@ -570,10 +608,12 @@
     layW = E("g", { id: "layW" }, svg);
     layN = E("g", { id: "layN" }, svg);
     layF = E("g", { id: "layF" }, svg);
+    layI = E("g", { id: "layI" }, svg);   // VPC-SC ingress markers, on top
     containers.forEach(drawContainer);
     pscWires.forEach(drawWire);
     nodes.forEach(drawNode);
     edges.forEach(drawEdge);
+    ingress.forEach(drawIngress);
   }
 
   /* ================= state ================= */
@@ -626,6 +666,8 @@
       var vis = n.step !== "run" && oi(n.step) <= maxIdx && oi(n.step) >= 0;
       toggle(elByNode[n.id], vis);
     });
+    // VPC-SC ingress markers appear from their step onward (persist through End + runtime)
+    ingress.forEach(function (ing) { toggle(elByIngress[ing.id], oi(ing.step) <= maxIdx && oi(ing.step) >= 0); });
     // teardown: hide anything a step at/before maxIdx deletes (e.g. the End step removes the creator SA + its roles)
     for (var si = 0; si <= maxIdx && si < steps.length; si++) {
       (steps[si].deletes || []).forEach(function (id) { toggle(elByNode[id] || elByContainer[id], false); });
@@ -649,6 +691,7 @@
   function clearFocus() {
     nodes.forEach(function (n) { if (elByNode[n.id]) elByNode[n.id].classList.remove("dim", "selected", "pulsing", "created"); });
     containers.forEach(function (c) { if (elByContainer[c.id]) elByContainer[c.id].classList.remove("dim", "selected", "created"); });
+    ingress.forEach(function (ig) { if (elByIngress[ig.id]) elByIngress[ig.id].classList.remove("selected"); });
   }
 
   function animateFlow(id, delay) {
@@ -816,9 +859,9 @@
   function renderLegend() {
     var L = document.getElementById("legend");
     var sets = {
-      deploy: [["line", "#d03b3b", "VPC-SC boundary", "8 5"], ["line", "#eb6834", "grant edge", "5 4"], ["dot", "#0b7a54", "created / changed this step"], ["dot", "#e0b25a", "pending"]],
-      launch: [["line", "#2a78d6", "user access"], ["line", "#eb6834", "control plane / launch"], ["line", "#c3c2b7", "DNS / boot", "4 3"], ["dot", "#d03b3b", "boundary crossing"]],
-      notebook: [["line", "#2a78d6", "user access"], ["line", "#eb6834", "control plane"], ["line", "#1baf7a", "data plane (governed read)"], ["dot", "#d03b3b", "VPC-SC crossing"]]
+      deploy: [["line", "#d03b3b", "VPC-SC boundary", "8 5"], ["line", "#eb6834", "grant edge", "5 4"], ["dot", "#0b7a54", "created / changed this step"], ["dot", "#e0b25a", "pending"], ["ring", "#d03b3b", "VPC-SC ingress · click"]],
+      launch: [["line", "#2a78d6", "user access"], ["line", "#eb6834", "control plane / launch"], ["line", "#c3c2b7", "DNS / boot", "4 3"], ["dot", "#d03b3b", "boundary crossing"], ["ring", "#d03b3b", "VPC-SC ingress · click"]],
+      notebook: [["line", "#2a78d6", "user access"], ["line", "#eb6834", "control plane"], ["line", "#1baf7a", "data plane (governed read)"], ["dot", "#d03b3b", "VPC-SC crossing"], ["ring", "#d03b3b", "VPC-SC ingress · click"]]
     };
     L.innerHTML = "";
     sets[tab].forEach(function (it) {
@@ -827,6 +870,8 @@
         var sw = document.createElement("span"); sw.className = "sw";
         sw.style.borderTopColor = it[1]; if (it[3]) sw.style.borderTopStyle = "dashed";
         s.appendChild(sw);
+      } else if (it[0] === "ring") {
+        var rg = document.createElement("span"); rg.className = "lgring"; rg.style.borderColor = it[1]; s.appendChild(rg);
       } else {
         var d = document.createElement("span"); d.className = "dot"; d.style.background = it[1]; s.appendChild(d);
       }
@@ -838,8 +883,9 @@
   function selectNode(id) {
     nodes.forEach(function (n) { if (elByNode[n.id]) elByNode[n.id].classList.remove("selected"); });
     containers.forEach(function (c) { if (elByContainer[c.id]) elByContainer[c.id].classList.remove("selected"); });
-    var g = elByNode[id] || elByContainer[id]; if (g) g.classList.add("selected");
-    var n = nodes.find(function (x) { return x.id === id; }) || containers.find(function (x) { return x.id === id; });
+    ingress.forEach(function (ig) { if (elByIngress[ig.id]) elByIngress[ig.id].classList.remove("selected"); });
+    var g = elByNode[id] || elByContainer[id] || elByIngress[id]; if (g) g.classList.add("selected");
+    var n = nodes.find(function (x) { return x.id === id; }) || containers.find(function (x) { return x.id === id; }) || ingress.find(function (x) { return x.id === id; });
     if (!n) return;
     var d = n.detail || {};
     var team = d.owner ? TEAM[d.owner] : null;
