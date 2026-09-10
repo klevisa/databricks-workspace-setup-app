@@ -323,17 +323,21 @@
       detail: {
         what: "Admits the read-only vended UC storage-credential SA to the data-lake bucket over the Storage API — a fourth guard on top of UC + IAM + the credential.",
         extra: [
-          { label: "Identity", body: "the RO storage credential's vended Databricks GCP SA." },
-          { label: "Methods", body: "read only — <code>objects.get</code> / <code>objects.list</code>." },
-          { label: "Source-pinned to", body: "Databricks control-plane project numbers — plus serverless-compute project numbers, so serverless can read too." } ],
+          { label: "Identity — the vended SA (only one)", body: "The rule names <strong>one</strong> principal: the RO storage credential's <strong>vended Databricks GCP SA</strong> (<code>serviceAccount:db-…@…</code>, generated when the credential is created; granted <code>objectViewer</code> + <code>legacyBucketReader</code>). SAME SA whether the read comes from classic or serverless compute." },
+          { label: "Source · UC control plane", body: "the <strong>regional control-plane Unity Catalog project</strong> — the UC control plane acts as the vended SA to validate the external location and vend down-scoped read tokens, reaching the bucket from outside your perimeter." },
+          { label: "Source · serverless (only if used)", body: "the <strong>regional serverless-compute project</strong> — serverless runs in Databricks-owned projects (not your VPC), so it reads as the SAME vended SA from there. Add this number so serverless can read too." },
+          { label: "Into · read methods", body: "<code>storage.googleapis.com</code> · <code>objects.get</code> + <code>objects.list</code>, on the data-lake bucket's project." },
+          { label: "Not in this rule", body: "classic in-VPC compute reads originate INSIDE the perimeter (node subnet → bucket) — intra-perimeter, so they need no ingress." } ],
         repo: "data-access/catalog-readonly.tf" } },
     { id: "ing_rw", step: "3", x: 1210, y: 866, title: "VPC-SC ingress · analytics (RW)",
       detail: {
         what: "Admits the read-write vended UC storage-credential SA to the analytics bucket over the Storage API.",
         extra: [
-          { label: "Identity", body: "the RW storage credential's vended Databricks GCP SA." },
-          { label: "Methods", body: "all storage methods (read + write)." },
-          { label: "Source-pinned to", body: "Databricks control-plane + serverless-compute project numbers." } ],
+          { label: "Identity — the vended SA (only one)", body: "One principal: the RW storage credential's <strong>vended Databricks GCP SA</strong> (<code>serviceAccount:db-…@…</code>, granted <code>objectAdmin</code>). SAME SA for classic or serverless compute." },
+          { label: "Source · UC control plane", body: "the <strong>regional control-plane Unity Catalog project</strong> — validates the external location and vends down-scoped tokens as the vended SA." },
+          { label: "Source · serverless (only if used)", body: "the <strong>regional serverless-compute project</strong> — serverless reads/writes as the SAME vended SA from Databricks-owned projects." },
+          { label: "Into · all methods", body: "<code>storage.googleapis.com</code> · read + write, on the analytics bucket's project." },
+          { label: "Not in this rule", body: "classic in-VPC compute originates inside the perimeter — intra-perimeter, no ingress needed." } ],
         repo: "data-access/catalog-readwrite.tf" } }
   ];
 
