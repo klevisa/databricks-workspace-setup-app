@@ -312,11 +312,13 @@
         note: "In this playbook the perimeter is customer-supplied, so this ingress is a prerequisite set on your existing perimeter — not created by workspace-setup/." } },
     { id: "ing_ws_build", step: "2.8", x: 1210, y: 1056, title: "VPC-SC ingress · workspace build",
       detail: {
-        what: "The SECOND update to the ingress rule. At finalize (2.8) the Workspace SA — minted at 2.4 — reaches into the service project to build the workspace storage (buckets) and disks. That call also originates from Databricks' control plane, so the perimeter must now admit the Workspace SA too.",
+        what: "The SECOND update to the ingress rule. At finalize (2.8) the Workspace SA — minted at 2.4 — reaches into the service project to build the workspace storage (buckets) and disks. This is where the perimeter must admit the Workspace SA.",
         extra: [
-          { label: "Identity — add the Workspace SA", body: "Update the ingress rule to pin the <strong>Workspace SA</strong> (<code>db-…@prod-gcp-…</code>) returned by 2.4 — it does the build (2.8) and the ongoing runtime resource ops. The temporary us-central1 creation pin can now be dropped." },
-          { label: "Into", body: "the service project · <code>storage</code>, <code>compute</code> (create buckets / disks / instances). Source-pinned to the regional control-plane projects." } ],
-        conn: ["Admits: 2.8 storage + disk build, and runtime VM launch — all as the Workspace SA."] } },
+          { label: "Identity — add the Workspace SA", body: "Pin the <strong>Workspace SA</strong> (<code>db-…@prod-gcp-…</code>) that 2.4 minted and returned — it does the build (2.8) and the ongoing runtime resource ops." },
+          { label: "Source · standing (the workspace's REGION)", body: "Add the <strong>regional control-plane VPC host project numbers</strong> (the workspace's own region) — the regional control plane operates the Workspace SA, so its calls originate there. This pin stays for the life of the workspace." },
+          { label: "Why us-central1 is dropped", body: "2.4's calls came from Databricks' <strong>us-central1</strong> account control plane (creation is account-level); 2.8 build + runtime come from the <strong>regional</strong> control plane instead. Once the workspace exists nothing originates from us-central1 — so drop that temporary pin and keep the standing regional one." },
+          { label: "Into", body: "the service project · <code>storage</code>, <code>compute</code> (create buckets / disks / instances). Identity AND source must both match." } ],
+        conn: ["Admits: 2.8 storage + disk build, and runtime VM launch — all as the Workspace SA, from the regional control plane."] } },
     { id: "ing_ro", step: "3", x: 1210, y: 760, title: "VPC-SC ingress · data lake (RO)",
       detail: {
         what: "Admits the read-only vended UC storage-credential SA to the data-lake bucket over the Storage API — a fourth guard on top of UC + IAM + the credential.",
