@@ -444,7 +444,9 @@
     nb_req2:     { c: "#eb6834", dash: "6 4", d: "M1145,305 H1200 V376 H1264", m: "o", label: "" },
     nb_req3:     { c: "#eb6834", dash: "6 4", d: "M1622,376 H1632 V700 H1615", m: "o", label: "" },
     // N4 vend: UC mints a down-scoped token, up to the control plane
-    nb_vend:     { c: "#eb6834", d: "M1265,700 H1250 V545 H1265", m: "o", vertical: true, label: "N4 · UC mints down-scoped token", lx: 1250, ly: 632 },
+    // N4 vend: UC reaches into the buckets (occasionally, to check table state) as the vended SA — crosses the perimeter (ingress)
+    nb_vend_ro:  { c: "#eb6834", d: "M1280,738 H1240 V760 H1160", m: "o", vertical: true, label: "N4 · UC mints down-scoped token", lx: 1252, ly: 812 },
+    nb_vend_rw:  { c: "#eb6834", d: "M1280,858 H1240 V866 H1160", m: "o", label: "" },
     // N5 context: plproxy -> frontend PSC endpoint -> driver (REST response — no 6666)
     nb_ctx:      { c: "#eb6834", dash: "6 4", d: "M905,340 H896 V480 H830", m: "o", label: "N5 · GCS token scoped to table paths · REST", lx: 690, ly: 394 },
     // N6 governed reads: executors (left VM) -> down the service/mail-data gap -> GCS buckets
@@ -482,8 +484,8 @@
       desc: "Executing the command, the driver needs to read a table, so it calls Unity Catalog via the workspace REST API — driver → frontend PSC endpoint → plproxy → UC (443, not the SCC relay).",
       flows: ["nb_req", "nb_req2", "nb_req3"], focus: ["drivervm", "frontendpsc", "plproxy", "controlplane", "uc"] },
     { id: "N4", title: "N4 · UC checks the grant & vends a down-scoped token", team: "data",
-      desc: "Unity Catalog verifies the querying principal holds the privilege, then uses the storage credential's vended GCP SA to mint a short-lived, path-scoped GCS token — read-only or read-write per the credential. No standing key leaves UC.",
-      flows: ["nb_vend"], focus: ["controlplane", "sc_ro", "sc_rw"] },
+      desc: "Unity Catalog verifies the querying principal holds the privilege, then mints a short-lived, path-scoped GCS token from the storage credential's vended SA (read-only or read-write). UC doesn't touch the bucket on every request, but it may reach into the data-lake / analytics buckets from time to time to validate the external location or check table state — and that access crosses the perimeter through the same VPC-SC ingress rule as the data reads.",
+      flows: ["nb_vend_ro", "nb_vend_rw"], ingress: ["ing_ro", "ing_rw"], focus: ["uc", "sc_ro", "sc_rw", "datalake", "analytics"] },
     { id: "N5", title: "N5 · Cluster receives its down-scoped context", team: "data",
       desc: "The control plane returns the table metadata + the down-scoped token to the driver over the SCC relay — again on the cluster's own outbound connection, never a new inbound path.",
       flows: ["nb_ctx"], focus: ["controlplane", "backendpsc", "drivervm"] },
