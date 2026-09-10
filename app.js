@@ -305,11 +305,6 @@
         extra: [
           { label: "Identity — pin the specific SAs (least-privilege)", body: "Name the two SAs that actually hold roles: the <strong>workspace-creator SA</strong> (read-only validation, 2.4 — Databricks bears its access token) and the <strong>Workspace SA</strong> (build at 2.8 + runtime — added once 2.4 mints and returns it)." },
           { label: "Source · during creation ONLY (temporary)", body: "Add <strong>only the us-central1 control-plane VPC host project numbers</strong> (GCP region reference) — Databricks marks these “Only required for workspace creation” (account-level provisioning routes through us-central1). Added on top of the standing rule, then removed once the workspace exists." },
-          { label: "Source · long-term (standing, ongoing operation)", items: [
-            "regional control-plane VPC host project(s)",
-            "regional control-plane Unity Catalog project",
-            "regional audit-log delivery project",
-            "regional serverless-compute project" ] },
           { label: "Into", body: "the host + service projects · <code>storage</code>, <code>compute</code>, <code>cloudkms</code>, <code>serviceusage</code>. VPC-SC requires BOTH identity and source to match (AND)." } ],
         conn: ["Admits: 2.4 validation (as the workspace-creator SA) · 2.7 CMEK ops + 2.8 build + runtime VM launch (as the Workspace SA)"],
         note: "In this playbook the perimeter is customer-supplied, so this ingress is a prerequisite set on your existing perimeter — not created by workspace-setup/." } },
