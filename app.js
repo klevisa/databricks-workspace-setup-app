@@ -303,9 +303,9 @@
       detail: {
         what: "The VPC-SC ingress rule that admits Databricks into your perimeter to create, validate, and run the workspace. These calls originate from Databricks' control-plane projects (outside the perimeter), so VPC-SC blocks them unless the perimeter admits them — even though IAM allows them.",
         extra: [
-          { label: "Identity — pin the specific SAs (least-privilege)", body: "Name the two SAs that actually hold roles: the <strong>workspace-creator SA</strong> (read-only validation, 2.4 — Databricks bears its access token) and the <strong>Workspace SA</strong> (build at 2.8 + runtime — added once 2.4 mints and returns it). Databricks' <em>general</em> examples use <code>ANY_IDENTITY</code> from the control-plane projects, but that's the coarse option (it even admits unauthenticated callers); since IAM already scopes these SAs, pinning them is the least-privilege choice." },
-          { label: "Source-pinned to these Databricks project numbers (ip-domain-region list)", items: [
-            "<strong>us-central1</strong> control-plane VPC host project — <strong>only required for workspace creation</strong> (account-level ops route through us-central1)",
+          { label: "Identity — pin the specific SAs (least-privilege)", body: "Name the two SAs that actually hold roles: the <strong>workspace-creator SA</strong> (read-only validation, 2.4 — Databricks bears its access token) and the <strong>Workspace SA</strong> (build at 2.8 + runtime — added once 2.4 mints and returns it)." },
+          { label: "Source · during creation ONLY (temporary)", body: "Add <strong>only the us-central1 control-plane VPC host project numbers</strong> (GCP region reference) — Databricks marks these “Only required for workspace creation” (account-level provisioning routes through us-central1). Added on top of the standing rule, then removed once the workspace exists." },
+          { label: "Source · long-term (standing, ongoing operation)", items: [
             "regional control-plane VPC host project(s)",
             "regional control-plane Unity Catalog project",
             "regional audit-log delivery project",
