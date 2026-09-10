@@ -430,7 +430,7 @@
     l2wssa: { c: "#eb6834", dash: "6 4", d: "M1265,250 H1225 V515 H1210", m: "o", label: "" },
     l2csa:  { c: "#eb6834", dash: "6 4", d: "M350,727 H316 V568 H585 V538", m: "o", vertical: true, label: "Workspace SA assigns Compute SA as VM identity", lx: 316, ly: 648 },
     l2cmek: { c: "#eb6834", dash: "6 4", d: "M720,994 H740 V568 H615 V538", m: "o", vertical: true, label: "disks come up CMEK encrypted", lx: 740, ly: 781 },
-    tunnel:{ c: "#c3c2b7", dash: "4 3", d: "M450,420 V393", m: "g", label: "resolve tunnel.<region>", lx: 462, ly: 410 },
+    tunnel:{ c: "#8a8880", dash: "4 3", d: "M450,420 V393", m: "g", label: "resolve tunnel.<region>", lx: 462, ly: 410 },
     l3:    { c: "#eb6834", d: "M860,505 H882 V405 H901", m: "o", label: "L3 · 6666", lx: 874, ly: 470 },
     b3:    { c: "#eb6834", d: "M1145,405 H1205 V432 H1263", m: "o", label: "" },
     // notebook runtime
@@ -886,7 +886,7 @@
     var L = document.getElementById("legend");
     var sets = {
       deploy: [["line", "#d03b3b", "VPC-SC boundary", "8 5"], ["line", "#eb6834", "grant edge", "5 4"], ["dot", "#0b7a54", "created / changed this step"], ["dot", "#e0b25a", "pending"], ["ring", "#d03b3b", "VPC-SC ingress · click"]],
-      launch: [["line", "#2a78d6", "user access"], ["line", "#eb6834", "control plane / launch"], ["line", "#c3c2b7", "DNS / boot", "4 3"], ["dot", "#d03b3b", "boundary crossing"], ["ring", "#d03b3b", "VPC-SC ingress · click"]],
+      launch: [["line", "#2a78d6", "user access"], ["line", "#eb6834", "control plane / launch"], ["line", "#8a8880", "DNS", "4 3"], ["dot", "#d03b3b", "boundary crossing"], ["ring", "#d03b3b", "VPC-SC ingress · click"]],
       notebook: [["line", "#2a78d6", "user access"], ["line", "#eb6834", "control plane"], ["line", "#1baf7a", "data plane (governed read)"], ["dot", "#d03b3b", "VPC-SC crossing"], ["ring", "#d03b3b", "VPC-SC ingress · click"]]
     };
     L.innerHTML = "";
