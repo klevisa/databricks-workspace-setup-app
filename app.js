@@ -198,7 +198,9 @@
       detail: {
         what: "The identity that creates the workspace. It is registered as a Databricks account admin and impersonated in phase 1 (2.4). It holds only the two read-only creator roles — it cannot create or modify GCP resources.",
         owner: "foundation",
-        extra: [ { label: "Roles held", body: "Creator role · service (2.1) + Creator role · host (2.2). Both read-only." } ],
+        extra: [
+          { label: "Roles held", body: "Creator role · service (2.1) + Creator role · host (2.2). Both read-only." },
+          { label: "How Databricks acts as it", body: "Your runner impersonates it (<code>serviceAccountTokenCreator</code>) to mint two short-lived Google tokens for the create call: an <strong>ID token</strong> (identity) and an <strong>OAuth access token</strong> in the <code>X-Databricks-GCP-SA-Access-Token</code> header. Databricks spends that access token to call your GCP APIs as this SA, then discards it — no key, no standing grant." } ],
         conn: ["SA: <code>databricks_account_admin_sa</code>", "Home project: your choice — it can be placed in the service project (not mandated by Databricks)", "Not the Workspace SA (minted in 2.4)"] } },
     { id: "crole_svc", step: "2.1", x: 350, y: 600, w: 370, h: 76, title: "Creator role · service",
       lines: ["Read-only settings validation"],
@@ -299,11 +301,17 @@
   var ingress = [
     { id: "ing_ws", step: "2.4", x: 1210, y: 626, title: "VPC-SC ingress · workspace",
       detail: {
-        what: "The foundational VPC-SC ingress rule that admits Databricks into your perimeter to build and run the workspace — without it, VPC Service Controls blocks these calls even though IAM allows them.",
+        what: "The foundational VPC-SC ingress rule that admits Databricks into your perimeter to create, validate, and run the workspace. The 2.4 validation call is made by Databricks bearing the creator SA's access token, but it <em>originates from Databricks' control-plane projects</em> (outside the perimeter) — so VPC-SC blocks it unless the perimeter admits those source projects, even though IAM allows it.",
         extra: [
-          { label: "Source-pinned to", body: "Databricks' region-specific control-plane project numbers (from the ip-domain-region list) — not ANY_IDENTITY." },
-          { label: "Into", body: "the host + service projects · <code>storage</code>, <code>compute</code>, <code>cloudkms</code>, <code>serviceusage</code>." } ],
-        conn: ["Admits: 2.4 settings validation · 2.7 CMEK ops · 2.8 bucket/disk/SA creation · runtime VM launch (as the Workspace SA)"],
+          { label: "Identity = ANY_IDENTITY (not a single SA)", body: "You do NOT pin one SA here. The calls come from Databricks-owned projects and Databricks mints/uses several control-plane SAs during creation — so trust is pinned by <strong>source project</strong>, not identity." },
+          { label: "Source-pinned to these Databricks project numbers (ip-domain-region list)", items: [
+            "<strong>us-central1</strong> control-plane VPC host project — <strong>only required for workspace creation</strong> (account-level ops route through us-central1)",
+            "regional control-plane VPC host project(s)",
+            "regional control-plane Unity Catalog project",
+            "regional audit-log delivery project",
+            "regional serverless-compute project" ] },
+          { label: "Into", body: "the host + service projects · <code>storage</code>, <code>compute</code>, <code>cloudkms</code>, <code>serviceusage</code> (all actions)." } ],
+        conn: ["Admits: 2.4 settings validation (creator SA's token) · 2.7 CMEK ops · 2.8 bucket/disk/SA creation · runtime VM launch (as the Workspace SA)"],
         note: "In this playbook the perimeter is customer-supplied, so this ingress is a prerequisite set on your existing perimeter — not created by workspace-setup/." } },
     { id: "ing_ro", step: "3", x: 1210, y: 760, title: "VPC-SC ingress · data lake (RO)",
       detail: {
