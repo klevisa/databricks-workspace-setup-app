@@ -666,8 +666,8 @@
       var vis = n.step !== "run" && oi(n.step) <= maxIdx && oi(n.step) >= 0;
       toggle(elByNode[n.id], vis);
     });
-    // VPC-SC ingress markers appear from their step onward (persist through End + runtime)
-    ingress.forEach(function (ing) { toggle(elByIngress[ing.id], oi(ing.step) <= maxIdx && oi(ing.step) >= 0); });
+    // VPC-SC ingress markers blink only on their own step (2.4 / 3) — not before, after, or in runtime
+    ingress.forEach(function (ing) { toggle(elByIngress[ing.id], oi(ing.step) === maxIdx); });
     // teardown: hide anything a step at/before maxIdx deletes (e.g. the End step removes the creator SA + its roles)
     for (var si = 0; si <= maxIdx && si < steps.length; si++) {
       (steps[si].deletes || []).forEach(function (id) { toggle(elByNode[id] || elByContainer[id], false); });
