@@ -455,7 +455,7 @@
     // N7 results: executors -> driver (processed dataset), then driver -> frontend PSC -> plproxy -> analyst
     nb_exec_ret: { c: "#2a78d6", dash: "5 4", d: "M590,498 H610", m: "b", label: "processed dataset", lx: 600, ly: 432 },
     nb_pd_lead:  { c: "#2a78d6", dash: "2 3", d: "M600,497 V441", label: "" },
-    ret:   { c: "#2a78d6", dash: "5 4", d: "M830,502 H872 V306 H905", m: "b", label: "N7 · results → analyst · 443", lx: 690, ly: 418 },
+    ret:   { c: "#2a78d6", dash: "5 4", d: "M830,502 H886 V215 H1025 V258", m: "b", label: "N7 · results → analyst · 443", lx: 996, ly: 205 },
     // 2.4 read-only "verify settings" sub-animation (Account API, via the creator role)
     v_net:  { c: "#8a8880", dash: "5 4", d: "M1265,610 H1216 V332 H1149", m: "g", label: "verify · network / PSC (read-only)", lx: 1120, ly: 600 },
     v_svc:  { c: "#8a8880", dash: "5 4", d: "M1265,640 H1210 V1068 H648 V1040", m: "g", label: "verify · service project (read-only)", lx: 860, ly: 1063 },
@@ -495,7 +495,7 @@
       flows: ["f7", "f8"], focus: ["execvm", "datalake", "analytics"], pulse: ["drivervm", "execvm"] },
     { id: "N7", title: "N7 · Results return to the analyst", team: "data",
       desc: "The executors send the processed dataset to the driver; the driver returns results over the frontend PSC wire → plproxy → analyst (443). The control plane sees metadata + query text (CMEK-encrypted) — never the data itself. The data never leaves the perimeter.",
-      flows: ["nb_exec_ret", "nb_pd_lead", "ret"], focus: ["admin", "drivervm", "execvm"] }
+      flows: ["nb_exec_ret", "nb_pd_lead", "ret"], focus: ["admin", "drivervm", "execvm", "frontendpsc", "plproxy"] }
   ];
 
   /* ================= rendering ================= */
