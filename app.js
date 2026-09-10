@@ -288,6 +288,8 @@
     { id: "e25b", step: "2.5", until: "2.7", d: "M1265,212 H1225 V1048 H758 V864 H720", label: "2.5 · resource role", lx: 760, ly: 864, vertical: true },
     { id: "e26", step: "2.6", until: "2.7", d: "M1265,235 H1200 V552 H620 V516", label: "2.6 · network role → WS SA", lx: 770, ly: 548 },
     { id: "e27", step: "2.7", until: "2.7", d: "M1265,262 H1240 V1062 H535 V1020", label: "2.7 · CMEK MANAGED_SERVICES → WS SA", lx: 600, ly: 1082 },
+    // 2.8 finalize: the Workspace SA builds the workspace storage inside the perimeter — crosses the ingress gate (ing_ws_build).
+    { id: "e_build", step: "2.8", until: "2.8", d: "M1265,250 H1238 V1056 H735 V928 H720", label: "2.8 · build storage (Workspace SA)", lx: 968, ly: 1056 },
     // data access (step 3): storage credentials + external locations wired to their buckets.
     { id: "e_sc_ro", step: "3", until: "3", color: "#1baf7a", marker: "a", d: "M1280,738 H1240 V760 H1160", label: "objectViewer", lx: 1240, ly: 740, vertical: true },
     { id: "e_el_ro", step: "3", until: "3", color: "#1baf7a", marker: "a", d: "M1280,798 H1226 V802 H1160", label: "" },
@@ -299,15 +301,22 @@
      Each marks where a Databricks-owned identity crosses INTO Yahoo's VPC-SC perimeter to reach a
      protected resource. Clickable for detail (incl. source-pinning). Shown from their step onward. */
   var ingress = [
-    { id: "ing_ws", step: "2.4", x: 1210, y: 626, title: "VPC-SC ingress · workspace",
+    { id: "ing_ws", step: "2.4", x: 1210, y: 626, title: "VPC-SC ingress · workspace creation",
       detail: {
-        what: "The VPC-SC ingress rule that admits Databricks into your perimeter to create, validate, and run the workspace. These calls originate from Databricks' control-plane projects (outside the perimeter), so VPC-SC blocks them unless the perimeter admits them — even though IAM allows them.",
+        what: "The FIRST of two updates to your perimeter's ingress rule. At 2.4 the create/validate call originates from Databricks' control-plane projects (outside the perimeter), so VPC-SC blocks it unless the perimeter admits it — even though IAM allows it.",
         extra: [
-          { label: "Identity — pin the specific SAs (least-privilege)", body: "Name the two SAs that actually hold roles: the <strong>workspace-creator SA</strong> (read-only validation, 2.4 — Databricks bears its access token) and the <strong>Workspace SA</strong> (build at 2.8 + runtime — added once 2.4 mints and returns it)." },
+          { label: "Identity — add the workspace-creator SA", body: "Pin the <strong>workspace-creator SA</strong>: the identity doing the read-only settings validation at 2.4 (Databricks bears its access token)." },
           { label: "Source · during creation ONLY (temporary)", body: "Add <strong>only the us-central1 control-plane VPC host project numbers</strong> (GCP region reference) — Databricks marks these “Only required for workspace creation” (account-level provisioning routes through us-central1). Added on top of the standing rule, then removed once the workspace exists." },
-          { label: "Into", body: "the host + service projects · <code>storage</code>, <code>compute</code>, <code>cloudkms</code>, <code>serviceusage</code>. VPC-SC requires BOTH identity and source to match (AND)." } ],
-        conn: ["Admits: 2.4 validation (as the workspace-creator SA) · 2.7 CMEK ops + 2.8 build + runtime VM launch (as the Workspace SA)"],
+          { label: "Into", body: "the host + service projects · <code>compute</code>, <code>cloudkms</code>, <code>serviceusage</code>, <code>resourcemanager</code> (read-only). VPC-SC requires BOTH identity and source to match (AND)." } ],
+        conn: ["Admits the 2.4 read-only settings validation. The rule is updated AGAIN at 2.8 to add the Workspace SA — see the 2.8 ingress marker."],
         note: "In this playbook the perimeter is customer-supplied, so this ingress is a prerequisite set on your existing perimeter — not created by workspace-setup/." } },
+    { id: "ing_ws_build", step: "2.8", x: 1210, y: 1056, title: "VPC-SC ingress · workspace build",
+      detail: {
+        what: "The SECOND update to the ingress rule. At finalize (2.8) the Workspace SA — minted at 2.4 — reaches into the service project to build the workspace storage (buckets) and disks. That call also originates from Databricks' control plane, so the perimeter must now admit the Workspace SA too.",
+        extra: [
+          { label: "Identity — add the Workspace SA", body: "Update the ingress rule to pin the <strong>Workspace SA</strong> (<code>db-…@prod-gcp-…</code>) returned by 2.4 — it does the build (2.8) and the ongoing runtime resource ops. The temporary us-central1 creation pin can now be dropped." },
+          { label: "Into", body: "the service project · <code>storage</code>, <code>compute</code> (create buckets / disks / instances). Source-pinned to the regional control-plane projects." } ],
+        conn: ["Admits: 2.8 storage + disk build, and runtime VM launch — all as the Workspace SA."] } },
     { id: "ing_ro", step: "3", x: 1210, y: 760, title: "VPC-SC ingress · data lake (RO)",
       detail: {
         what: "Admits the read-only vended UC storage-credential SA to the data-lake bucket over the Storage API — a fourth guard on top of UC + IAM + the credential.",
@@ -385,7 +394,7 @@
     { id: "2.8", label: "Finalize — PHASE 2", short: "Workspace RUNNING", team: "data", repo: "workspace/ (finalize=true)",
       narrative: "Data Platform re-applies with finalize=true. expected_workspace_status flips to RUNNING; the now-authorized Workspace SA provisions the workspace GCS buckets + GCE disks (CMEK-encrypted). The workspace is assigned to the metastore and reaches RUNNING.",
       privileges: ["Databricks account admin"],
-      creates: ["wsbuckets"], changed: ["wssa"], hideEdges: true, creatLabel: ["Workspace GCS buckets + GCE disks", "Workspace → RUNNING"],
+      creates: ["wsbuckets"], changed: ["wssa"], edges: ["e_build"], creatLabel: ["Workspace GCS buckets + GCE disks", "Ingress rule → add the Workspace SA", "Workspace → RUNNING"],
       states: { wssa: "workspace: RUNNING" } },
 
     { id: "3", label: "Data access — UC catalogs", short: "Data access", team: "data", repo: "data-access/",
