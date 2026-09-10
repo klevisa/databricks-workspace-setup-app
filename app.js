@@ -106,14 +106,14 @@
         owner: "data",
         perms: ["roles/storage.objectViewer", "roles/storage.legacyBucketReader"], permsLabel: " · on the data-lake bucket",
         conn: ["Admitted by a VPC-SC ingress rule scoped to read methods (objects.get/list)"] } },
-    { id: "sc_rw", step: "3", x: 1280, y: 772, w: 320, h: 52, title: "Storage credential · analytics_rw",
+    { id: "sc_rw", step: "3", x: 1280, y: 832, w: 320, h: 52, title: "Storage credential · analytics_rw",
       lines: [], identity: "IDENTITY · vended Databricks GCP SA (RW)",
       detail: {
         what: "Read-write storage credential. Its own generated GCP service account is granted objectAdmin on the analytics bucket (created in this phase).",
         owner: "data",
         perms: ["roles/storage.objectAdmin", "roles/storage.legacyBucketReader"], permsLabel: " · on the analytics bucket",
         conn: ["Admitted by a VPC-SC ingress rule (all methods)"] } },
-    { id: "el_ro", step: "3", x: 1280, y: 832, w: 320, h: 52, title: "External location · source_data",
+    { id: "el_ro", step: "3", x: 1280, y: 772, w: 320, h: 52, title: "External location · source_data",
       lines: ["read-only · gs://…/data-lake"],
       detail: {
         what: "Read-only external location over the data-lake bucket, using the read-only storage credential. Backs the source_data_ro catalog (namespace only; external tables registered later).",
@@ -287,10 +287,10 @@
     { id: "e26", step: "2.6", until: "2.7", d: "M1265,235 H1200 V552 H620 V516", label: "2.6 · network role → WS SA", lx: 770, ly: 548 },
     { id: "e27", step: "2.7", until: "2.7", d: "M1265,262 H1240 V1062 H535 V1020", label: "2.7 · CMEK MANAGED_SERVICES → WS SA", lx: 600, ly: 1082 },
     // data access (step 3): storage credentials + external locations wired to their buckets.
-    { id: "e_sc_ro", step: "3", until: "3", color: "#1baf7a", marker: "a", d: "M1280,738 H1240 V768 H1160", label: "objectViewer", lx: 1240, ly: 742, vertical: true },
-    { id: "e_el_ro", step: "3", until: "3", color: "#1baf7a", marker: "a", d: "M1280,858 H1224 V805 H1160", label: "" },
-    { id: "e_sc_rw", step: "3", until: "3", color: "#2a78d6", marker: "b", d: "M1280,798 H1256 V860 H1160", label: "objectAdmin", lx: 1256, ly: 815, vertical: true },
-    { id: "e_el_rw", step: "3", until: "3", color: "#2a78d6", marker: "b", d: "M1280,918 H1236 V898 H1160", label: "" }
+    { id: "e_sc_ro", step: "3", until: "3", color: "#1baf7a", marker: "a", d: "M1280,738 H1240 V760 H1160", label: "objectViewer", lx: 1240, ly: 740, vertical: true },
+    { id: "e_el_ro", step: "3", until: "3", color: "#1baf7a", marker: "a", d: "M1280,798 H1226 V802 H1160", label: "" },
+    { id: "e_sc_rw", step: "3", until: "3", color: "#2a78d6", marker: "b", d: "M1280,858 H1240 V866 H1160", label: "objectAdmin", lx: 1240, ly: 838, vertical: true },
+    { id: "e_el_rw", step: "3", until: "3", color: "#2a78d6", marker: "b", d: "M1280,918 H1226 V902 H1160", label: "" }
   ];
 
   // PSC "wires": consumer endpoint → producer service attachment. Dashed/pending when
