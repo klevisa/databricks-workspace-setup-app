@@ -465,7 +465,7 @@
       flows: ["l1a", "l1b"], focus: ["admin", "frontendpsc", "plproxy", "controlplane"] },
     { id: "L2", title: "L2 · Cluster manager launches VMs", team: "data",
       desc: "Acting AS the Workspace SA (control-plane-owned launcher), the cluster manager calls the GCE API to create driver + executor VMs in the service project with CMEK-encrypted disks. It assigns the Compute SA as the VMs' identity — the VMs boot as the Compute SA, never the Workspace SA. The launch crosses the perimeter through the VPC-SC ingress rule created at 2.8 (Workspace SA, from the regional control plane).",
-      flows: ["l2", "l2wssa", "l2csa", "l2cmek"], ingress: ["ing_launch"], reveal: ["drivervm", "execvm"], focus: ["controlplane", "computesa", "drivervm", "execvm", "kms", "wssa"] },
+      flows: ["l2", "l2wssa", "l2csa", "l2cmek"], ingress: ["ing_launch"], reveal: ["drivervm", "execvm"], focus: ["controlplane", "plproxy", "ngrok", "computesa", "drivervm", "execvm", "kms", "wssa"] },
     { id: "L3", title: "L3 · Cluster dials home (SCC relay)", team: "data",
       desc: "The VMs resolve tunnel.<region> in the private DNS zone, open TCP 6666 outbound to the backend endpoint → ngrok attachment. The cluster registers and reaches RUNNING. No inbound path to the cluster exists.",
       flows: ["tunnel", "l3", "b3"], focus: ["drivervm", "backendpsc", "ngrok"], run: "RUNNING" }
