@@ -33,7 +33,19 @@
     { id: "dbx",       step: "0", x: 1240, y: 140, w: 400, h: 700, label: "DATABRICKS-OWNED GCP PROJECTS — OUTSIDE THE PERIMETER", cls: "frame" },
     { id: "internet",  step: "0", x: 1240, y: 870, w: 400, h: 120, label: "PUBLIC INTERNET", cls: "frame" },
     { id: "pscsubnet", step: "2.2", x: 890, y: 225, w: 270, h: 265, label: "PSC SUBNET x.x.x.x/28 (min /28)", cls: "subframe" },
-    { id: "nodesubnet",step: "2.2", x: 350, y: 420, w: 510, h: 122, label: "NODE SUBNET x.x.x.x/y · NPIP · PGA ON", cls: "subframe" }
+    { id: "nodesubnet",step: "2.2", x: 350, y: 420, w: 510, h: 122, label: "NODE SUBNET x.x.x.x/y · NPIP · PGA ON", cls: "subframe",
+      detail: {
+        what: "The private subnet the cluster VMs live in — NPIP (no public IPs), with Private Google Access ON so nodes reach Google APIs and the control plane privately.",
+        owner: "network",
+        extra: [
+          { label: "Subnet sizing — 2 IPs per node", items: ["/21 → 1000 nodes", "/20 → 2000 nodes", "/19 → 4000 nodes", "(max compute nodes per workspace)"] },
+          { label: "Required firewall rules", items: [
+            "Ingress: allow all within the subnet CIDR (node ↔ node)",
+            "Egress → PSC endpoint subnet: TCP 443 + 8443–8451 (control plane + SCC relay)",
+            "Egress → <code>restricted.googleapis.com</code>: 199.36.153.4/30 (all) + 34.126.0.0/18 (TCP 443) — Google APIs via Private Google Access",
+            "Deny-all egress by default · no public inbound"
+          ] }
+        ] } }
   ];
 
   /* ---------------- resource nodes ----------------
@@ -117,11 +129,18 @@
         owner: "network",
         conn: ["Carries SCC relay · TCP 6666", "PENDING at 2.2 → ACCEPTED at 2.4"],
         repo: "network/" } },
-    { id: "firewall", step: "2.2", x: 373, y: 480, w: 0, h: 0, textOnly: true, deployOnly: true,
-      lines: [
-        "Firewall — cluster egress allowed to the PSC subnet only",
-        "no inbound from the internet · intra-subnet traffic allowed"
-      ] },
+    // Workspace-SA network operator role — granted at 2.6, lives on the host node subnet.
+    // deployOnly so it doesn't collide with the runtime VMs that fill this subnet in tabs 2/3.
+    { id: "netrole", step: "2.6", x: 366, y: 450, w: 300, h: 66, title: "Workspace operator network role", deployOnly: true,
+      lines: ["subnetworks.get / use (node subnet)"],
+      identity: "IDENTITY · granted to the WS SA · node subnet",
+      detail: {
+        what: "Custom role on the HOST project, granted to the Workspace SA in step 2.6, that lets it place cluster VMs on this shared node subnet across the VPC boundary.",
+        owner: "network",
+        role: "lpw.databricks.network.role.v2",
+        permsLabel: " (use the node subnet)",
+        perms: ["compute.subnetworks.get", "compute.subnetworks.use"],
+        repo: "post-workspace/iam.tf" } },
 
     // Node subnet — runtime VMs (tabs 2/3)
     { id: "drivervm", step: "run", x: 370, y: 452, w: 220, h: 86, title: "Driver VM",
@@ -146,8 +165,8 @@
         what: "The identity that creates the workspace. It is registered as a Databricks account admin and impersonated in phase 1 (2.4). It holds only the two read-only creator roles — it cannot create or modify GCP resources.",
         owner: "foundation",
         extra: [ { label: "Roles held", body: "Creator role · service (2.1) + Creator role · host (2.2). Both read-only." } ],
-        conn: ["SA: <code>databricks_account_admin_sa</code>", "Home project: the service project", "Not the Workspace SA (minted in 2.4)"] } },
-    { id: "crole_svc", step: "2.1", x: 350, y: 724, w: 370, h: 76, title: "Creator role · service",
+        conn: ["SA: <code>databricks_account_admin_sa</code>", "Home project: your choice — it can be placed in the service project (not mandated by Databricks)", "Not the Workspace SA (minted in 2.4)"] } },
+    { id: "crole_svc", step: "2.1", x: 350, y: 600, w: 370, h: 76, title: "Creator role · service",
       lines: ["Read-only settings validation"],
       identity: "IDENTITY · held by the workspace-creator SA",
       detail: {
@@ -157,7 +176,7 @@
         perms: ["cloudkms.cryptoKeys.getIamPolicy", "compute.projects.get", "iam.roles.get", "iam.serviceAccounts.get", "iam.serviceAccounts.getIamPolicy", "resourcemanager.projects.get", "resourcemanager.projects.getIamPolicy", "serviceusage.services.get", "serviceusage.services.list"],
         repo: "service-project/creator-roles.tf" } },
     // Workspace-SA operator roles — created + granted to the Workspace SA at 2.5.
-    { id: "projrole", step: "2.5", x: 350, y: 600, w: 370, h: 48, title: "Workspace-SA project role",
+    { id: "projrole", step: "2.5", x: 350, y: 778, w: 370, h: 48, title: "Workspace operator project role",
       lines: [],
       identity: "IDENTITY · granted to the WS SA · read + actAs",
       detail: {
@@ -167,7 +186,7 @@
         permsLabel: " (read + actAs)",
         perms: ["compute.disks.list", "compute.globalOperations.list", "compute.instances.list", "compute.regionOperations.list", "compute.regions.get", "compute.reservations.get", "compute.reservations.list", "compute.spotAssistants.get", "compute.zoneOperations.list", "compute.zones.get", "compute.zones.list", "iam.serviceAccounts.actAs", "resourcemanager.projects.get", "serviceusage.quotas.get", "serviceusage.services.list", "storage.buckets.list"],
         repo: "workspace-sa-roles/roles.tf" } },
-    { id: "resrole", step: "2.5", x: 350, y: 662, w: 370, h: 48, title: "Workspace-SA resource role",
+    { id: "resrole", step: "2.5", x: 350, y: 840, w: 370, h: 48, title: "Workspace operator resource role",
       lines: [],
       identity: "IDENTITY · granted to the WS SA · creates storage + VMs",
       detail: {
@@ -178,14 +197,14 @@
         perms: ["compute.disks.create", "compute.disks.delete", "compute.disks.get", "compute.disks.resize", "compute.disks.setLabels", "compute.disks.update", "compute.disks.use", "compute.disks.useReadOnly", "compute.instances.attachDisk", "compute.instances.create", "compute.instances.delete", "compute.instances.detachDisk", "compute.instances.get", "compute.instances.getGuestAttributes", "compute.instances.getSerialPortOutput", "compute.instances.setLabels", "compute.instances.setMetadata", "compute.instances.setServiceAccount", "compute.instances.setTags", "compute.instances.update", "storage.buckets.create", "storage.buckets.delete", "storage.buckets.get", "storage.buckets.getIamPolicy", "storage.buckets.setIamPolicy", "storage.buckets.update", "storage.multipartUploads.abort", "storage.multipartUploads.create", "storage.multipartUploads.list", "storage.multipartUploads.listParts", "storage.objects.create", "storage.objects.delete", "storage.objects.get", "storage.objects.list", "storage.objects.update"],
         extra: [ { label: "IAM condition — scoped to this workspace", body: "Bound project-wide but limited by an IAM condition to resources whose names carry both <code>databricks</code> and this workspace's id, so the SA can only touch this workspace's own buckets/disks/instances." } ],
         repo: "workspace-sa-roles/roles.tf" } },
-    { id: "computesa", step: "2.8", x: 350, y: 814, w: 370, h: 74, title: "Compute SA", accent: true,
+    { id: "computesa", step: "2.1", x: 350, y: 690, w: 370, h: 74, title: "Compute SA", accent: true,
       lines: ["The VMs' runtime identity"],
       identity: "IDENTITY · not the launcher · minimal perms",
       detail: {
         what: "The runtime identity the cluster VMs actually run as — minimal permissions, not the launcher. An optional custom Cluster SA can override it per cluster.",
-        owner: "data",
-        conn: ["Default: <code>databricks-compute@&lt;svc-project&gt;</code> (GCE default SA)", "Created in phase 2 (2.8)"] } },
-    { id: "kms", step: "2.3", x: 350, y: 902, w: 370, h: 52, title: "Cloud KMS — CMEK key",
+        owner: "foundation",
+        conn: ["Default: <code>databricks-compute@&lt;svc-project&gt;</code> (GCE default SA)", "Exists from service-project creation (2.1) — created with Compute Engine"] } },
+    { id: "kms", step: "2.3", x: 350, y: 968, w: 370, h: 52, title: "Cloud KMS — CMEK key",
       lines: ["Customer-managed encryption key"],
       detail: {
         what: "The customer keyring + key that encrypts the workspace. Two use cases: STORAGE (buckets/disks) and MANAGED_SERVICES (control-plane data).",
@@ -194,7 +213,7 @@
           { label: "STORAGE · granted 2.3", body: "encrypt/decrypt to the service project's Google compute-system + gs-project-accounts agents." },
           { label: "MANAGED_SERVICES · granted 2.7", body: "<code>cryptoKeyEncrypterDecrypter</code> to the Workspace SA." } ],
         repo: "cmek/ · cmek-workspace-grant/" } },
-    { id: "wsbuckets", step: "2.8", x: 350, y: 968, w: 370, h: 52, title: "Workspace storage",
+    { id: "wsbuckets", step: "2.8", x: 350, y: 902, w: 370, h: 52, title: "Workspace storage",
       lines: ["System data + DBFS root (CMEK)"],
       detail: {
         what: "The workspace's own GCS buckets and GCE disks — system data and the DBFS root — created by the Workspace SA at finalize (2.8). All CMEK-encrypted (STORAGE).",
@@ -230,7 +249,7 @@
   var edges = [
     { id: "e25", step: "2.5", d: "M1265,270 H1226 V1058 H430 V1040", label: "2.5 · project + resource roles → WS SA", lx: 690, ly: 1054 },
     { id: "e26", step: "2.6", d: "M1265,250 H1192 V540 H862", label: "2.6 · network role → WS SA", lx: 1015, ly: 532 },
-    { id: "e27", step: "2.7", d: "M1265,262 H1232 V1076 H344 V928 H350", label: "2.7 · CMEK MANAGED_SERVICES → WS SA", lx: 640, ly: 1072 }
+    { id: "e27", step: "2.7", d: "M1265,262 H1232 V1076 H344 V994 H350", label: "2.7 · CMEK MANAGED_SERVICES → WS SA", lx: 640, ly: 1072 }
   ];
 
   // PSC "wires": consumer endpoint → producer service attachment. Dashed/pending when
@@ -248,15 +267,15 @@
       note: "Four service accounts to keep straight: Workspace SA (launcher, control-plane-owned), Compute SA (what the VMs run as), optional Cluster SA (custom per-cluster), and the vended UC storage-credential SA (governed reads)." },
 
     { id: "2.1", label: "Create service project", short: "Service project", team: "foundation", repo: "service-project/",
-      narrative: "Cloud Foundation creates the service project (the tenant for this one workspace), enables its APIs, attaches it to the existing Shared VPC host, and provisions the GCS/compute service agents. It also defines the read-only workspace-creator role and grants it to the creator SA on the service project.",
+      narrative: "Cloud Foundation creates the service project (the tenant for this one workspace), enables its APIs, attaches it to the existing Shared VPC host, and provisions the GCS/compute service agents — including the Compute SA (GCE default) the cluster VMs will run as. It also defines the read-only workspace-creator role and grants it to the creator SA on the service project.",
       privileges: ["resourcemanager.projectCreator", "billing.user", "compute.xpnAdmin", "resourcemanager.projectIamAdmin", "serviceusage.serviceUsageAdmin", "iam.roleAdmin"],
-      creates: ["service", "creatorsa", "crole_svc"],
-      creatLabel: ["Service project", "Workspace-creator SA", "Creator role — service, read-only (held by the SA)"] },
+      creates: ["service", "creatorsa", "computesa", "crole_svc"],
+      creatLabel: ["Service project", "Workspace-creator SA", "Compute SA (GCE default)", "Creator role — service, read-only (held by the SA)"] },
 
     { id: "2.2", label: "Create network", short: "Network", team: "network", repo: "network/",
       narrative: "Network Engineering builds the private landing zone inside the host project: VPC + node subnet (NPIP, PGA on) + PSC subnet, firewall, Cloud Router/NAT, the private DNS zone (zone only — records come in 2.6), and the two PSC endpoints, which come up PENDING. It also grants the read-only creator role on the host project.",
       privileges: ["compute.networkAdmin", "compute.securityAdmin", "dns.admin", "iam.roleAdmin"],
-      creates: ["dnszone", "routernat", "pscsubnet", "frontendpsc", "backendpsc", "nodesubnet", "firewall", "crole_host"],
+      creates: ["dnszone", "routernat", "pscsubnet", "frontendpsc", "backendpsc", "nodesubnet", "crole_host"],
       creatLabel: ["VPC + node/PSC subnets", "Cloud Router + NAT (optional)", "Private DNS zone (no records yet)", "Frontend + Backend PSC endpoints (PENDING)", "Creator role — host, read-only (held by the SA)"] },
 
     { id: "2.3", label: "CMEK key", short: "CMEK", team: "security", repo: "cmek/",
@@ -280,7 +299,7 @@
     { id: "2.6", label: "Post-workspace config", short: "Network role + DNS", team: "network", repo: "post-workspace/",
       narrative: "Network Engineering grants the Workspace SA the custom network role (subnetworks.get/use) on the node subnet so it can place VMs across the Shared-VPC boundary, and writes the four DNS A-records into the zone so workspace hostnames resolve to the private PSC IPs.",
       privileges: ["compute.networkAdmin", "dns.admin", "iam.roleAdmin"],
-      creates: [], edges: ["e26"], creatLabel: ["Network role → Workspace SA (node subnet)", "4 DNS A-records"],
+      creates: ["netrole"], edges: ["e26"], creatLabel: ["Network role → Workspace SA (node subnet)", "4 DNS A-records"],
       states: { dnszone: "records" } },
 
     { id: "2.7", label: "MANAGED_SERVICES CMEK grant", short: "CMEK grant", team: "security", repo: "cmek-workspace-grant/",
@@ -289,9 +308,9 @@
       creates: [], edges: ["e27"], creatLabel: ["CMEK encrypt/decrypt → Workspace SA"] },
 
     { id: "2.8", label: "Finalize — PHASE 2", short: "Workspace RUNNING", team: "data", repo: "workspace/ (finalize=true)",
-      narrative: "Data Platform re-applies with finalize=true. expected_workspace_status flips to RUNNING; the now-authorized Workspace SA provisions the workspace GCS buckets + GCE disks (CMEK-encrypted) and creates the Compute SA. The workspace is assigned to the metastore and reaches RUNNING.",
+      narrative: "Data Platform re-applies with finalize=true. expected_workspace_status flips to RUNNING; the now-authorized Workspace SA provisions the workspace GCS buckets + GCE disks (CMEK-encrypted). The workspace is assigned to the metastore and reaches RUNNING.",
       privileges: ["Databricks account admin"],
-      creates: ["computesa", "wsbuckets"], creatLabel: ["Compute SA", "Workspace GCS buckets + GCE disks", "Workspace → RUNNING"],
+      creates: ["wsbuckets"], creatLabel: ["Workspace GCS buckets + GCE disks", "Workspace → RUNNING"],
       states: { wssa: "workspace: RUNNING" } }
   ];
 
@@ -300,7 +319,7 @@
     // cluster launch
     l1a:   { c: "#2a78d6", d: "M270,205 H872 V305 H901", m: "b", label: "L1 · clusters/create · TLS 443", lx: 780, ly: 190, cross: [[300, 205, "B1"]] },
     l1b:   { c: "#2a78d6", d: "M1145,305 H1205 V332 H1263", m: "b", label: "B2", lx: 1180, ly: 300, cross: [[1205, 332, "B2"]] },
-    l2:    { c: "#eb6834", d: "M1263,600 H1225 V1064 H755 V851 H722", m: "o", label: "L2 · GCE: launch VMs — as the Workspace SA", lx: 985, ly: 1058, cross: [[1210, 1064, "B6"]] },
+    l2:    { c: "#eb6834", d: "M1263,600 H1225 V1064 H755 V727 H722", m: "o", label: "L2 · GCE: launch VMs — as the Workspace SA", lx: 985, ly: 1058, cross: [[1210, 1064, "B6"]] },
     boot:  { c: "#eb6834", dash: "6 4", d: "M480,560 V540", m: "o", label: "VMs boot Runtime + Photon — as Compute SA", lx: 545, ly: 556 },
     tunnel:{ c: "#c3c2b7", dash: "4 3", d: "M450,420 V393", m: "g", label: "resolve tunnel.<region>", lx: 462, ly: 410 },
     l3:    { c: "#eb6834", d: "M860,505 H882 V405 H901", m: "o", label: "L3 · 6666", lx: 874, ly: 470 },
@@ -316,7 +335,7 @@
     // 2.4 read-only "verify settings" sub-animation (Account API, via the creator role)
     v_net:  { c: "#8a8880", dash: "5 4", d: "M1265,700 H1216 V332 H1149", m: "g", label: "verify · network / PSC (read-only)", lx: 1120, ly: 700 },
     v_svc:  { c: "#8a8880", dash: "5 4", d: "M1265,758 H1210 V1050 H520 V1040", m: "g", label: "verify · service project (read-only)", lx: 800, ly: 1046 },
-    v_cmek: { c: "#8a8880", dash: "5 4", d: "M1265,772 H1200 V1072 H346 V928 H350", m: "g", label: "verify · CMEK (read-only)", lx: 470, ly: 1068 }
+    v_cmek: { c: "#8a8880", dash: "5 4", d: "M1265,772 H1200 V1072 H346 V994 H350", m: "g", label: "verify · CMEK (read-only)", lx: 470, ly: 1068 }
   };
 
   var launchStages = [
@@ -373,7 +392,7 @@
     var g = E("g", { class: "node container", "data-step": c.step, "data-id": c.id }, layC);
     BASE[c.id] = { x: c.x, y: c.y, w: c.w, h: c.h };
     var isPeri = c.cls === "perimeter", isSub = c.cls === "subframe";
-    E("rect", {
+    var cbox = E("rect", {
       class: "box", x: c.x, y: c.y, width: c.w, height: c.h, rx: 12,
       fill: isSub ? "none" : "#f9f9f7",
       stroke: isPeri ? "#d03b3b" : "#c9c8c0",
@@ -381,6 +400,11 @@
       "stroke-dasharray": isPeri ? "8 5" : (isSub ? "4 3" : "0")
     }, g);
     txt(g, c.x + 16, c.y + fs(17), c.label, { "font-size": fs(12), "font-weight": 700, "letter-spacing": "0.2", fill: isPeri ? "#d03b3b" : "#898781" });
+    if (c.detail) {
+      g.classList.add("clickable");
+      cbox.setAttribute("pointer-events", "all");   // fill:none subframes ignore clicks otherwise
+      g.addEventListener("click", function () { selectNode(c.id); });
+    }
     elByContainer[c.id] = g;
   }
 
@@ -509,8 +533,8 @@
   function setWsStatus(text, running) {
     var g = elByNode.wssa; if (!g) return;
     if (!g._ws) {
-      var wr = E("rect", { x: 1265 + 350 - 158, y: 180 + 6, width: 150, height: 19, rx: 9.5, fill: "#fff", stroke: "#c3c2b7" }, g);
-      var wt = txt(g, 1265 + 350 - 83, 180 + 19, "", { "font-size": fs(10.5), "font-weight": 700, "text-anchor": "middle", fill: "#898781" });
+      var wr = E("rect", { x: 1265 + 350 - 188, y: 180 + 6, width: 180, height: 19, rx: 9.5, fill: "#fff", stroke: "#c3c2b7" }, g);
+      var wt = txt(g, 1265 + 350 - 98, 180 + 19, "", { "font-size": fs(10.5), "font-weight": 700, "text-anchor": "middle", fill: "#898781" });
       g._ws = { r: wr, t: wt };
     }
     if (!text) { g._ws.r.setAttribute("opacity", 0); g._ws.t.textContent = ""; return; }
@@ -527,7 +551,7 @@
     setPill("frontendpsc", fe); setPill("backendpsc", fe);
     setPill("dnszone", maxIdx >= oi("2.2") ? (maxIdx >= oi("2.6") ? "records" : "zoneonly") : null);
     if (maxIdx >= oi("2.8")) setWsStatus("workspace: RUNNING", true);
-    else if (maxIdx >= oi("2.4")) setWsStatus("PROVISIONING", false);
+    else if (maxIdx >= oi("2.4")) setWsStatus("workspace: PROVISIONING", false);
     else setWsStatus("", false);
   }
 
@@ -735,12 +759,14 @@
 
   function selectNode(id) {
     nodes.forEach(function (n) { if (elByNode[n.id]) elByNode[n.id].classList.remove("selected"); });
-    var g = elByNode[id]; if (g) g.classList.add("selected");
-    var n = nodes.find(function (x) { return x.id === id; }); if (!n) return;
+    containers.forEach(function (c) { if (elByContainer[c.id]) elByContainer[c.id].classList.remove("selected"); });
+    var g = elByNode[id] || elByContainer[id]; if (g) g.classList.add("selected");
+    var n = nodes.find(function (x) { return x.id === id; }) || containers.find(function (x) { return x.id === id; });
+    if (!n) return;
     var d = n.detail || {};
     var team = d.owner ? TEAM[d.owner] : null;
     var p = document.getElementById("panelBody");
-    var h = '<div class="step-id">Resource</div><h2>' + n.title + '</h2>';
+    var h = '<div class="step-id">Resource</div><h2>' + (n.title || n.label) + '</h2>';
     if (team) h += '<span class="chip" style="background:' + team.color + '">' + team.name + '</span>';
     h += '<p>' + (d.what || (n.lines || []).join("<br>")) + '</p>';
     if (n.identity) h += '<p class="note" style="border-color:#f4c7b3;color:#b3421f">' + n.identity + '</p>';
@@ -750,7 +776,11 @@
       d.perms.forEach(function (pm) { h += '<span class="tag priv">' + pm + '</span>'; });
       h += '</div>';
     }
-    (d.extra || []).forEach(function (s) { h += '<h3>' + s.label + '</h3><p>' + s.body + '</p>'; });
+    (d.extra || []).forEach(function (s) {
+      h += '<h3>' + s.label + '</h3>';
+      if (s.body) h += '<p>' + s.body + '</p>';
+      if (s.items) { h += '<ul>'; s.items.forEach(function (it) { h += '<li>' + it + '</li>'; }); h += '</ul>'; }
+    });
     if (d.conn && d.conn.length) {
       h += '<h3>Connectivity &amp; identity</h3><ul>';
       d.conn.forEach(function (c) { h += '<li>' + c + '</li>'; });
