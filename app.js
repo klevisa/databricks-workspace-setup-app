@@ -361,7 +361,7 @@
       changed: ["frontendpsc", "backendpsc"],
       states: { frontendpsc: "ACCEPTED", backendpsc: "ACCEPTED", wssa: "workspace: PROVISIONING" },
       flows: ["v_net", "v_svc", "v_cmek"], pulse: ["service", "kms"],
-      substep: "Sub-step: using the read-only creator roles from 2.1/2.2, the Account API first reaches into the service project, the host network/PSC, and the CMEK key to validate settings — read-only — before it creates anything." },
+      substep: "Sub-step: this read-only validation runs AS the workspace-creator SA (impersonated) — holding its two creator roles (2.1 service + 2.2 host), it reads the service project, the host network/PSC, and the CMEK key to validate settings before anything is created. Only read access is needed at creation time; the actual resource build (2.8) runs as the Workspace SA." },
 
     { id: "2.5", label: "Workspace-SA operator roles", short: "Operator roles", team: "iam", repo: "workspace-sa-roles/",
       narrative: "Cloud IAM defines and grants the Project role and the workspace-scoped Resource role to the Workspace SA on the service project. The Resource role carries storage.buckets.create / compute.instances.create — the permissions that let the SA build the workspace's storage and VMs — scoped by an IAM condition to this workspace's resources.",
