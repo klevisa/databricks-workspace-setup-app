@@ -426,7 +426,7 @@
 
   var launchStages = [
     { id: "L1", title: "L1 · Analyst starts a cluster", team: "data",
-      desc: "POST /api/2.x/clusters/create over TLS 443 crosses the perimeter (B1) and the frontend PSC wire to the control-plane cluster manager. Auth = Okta session / PAT.",
+      desc: "POST /api/2.x/clusters/create over TLS 443 crosses the perimeter and the frontend PSC wire to the control-plane cluster manager. Auth = Okta session / PAT.",
       flows: ["l1a", "l1b"], focus: ["admin", "frontendpsc", "plproxy", "controlplane"] },
     { id: "L2", title: "L2 · Cluster manager launches VMs", team: "data",
       desc: "Acting AS the Workspace SA (control-plane-owned launcher), the cluster manager calls the GCE API to create driver + executor VMs in the service project with CMEK-encrypted disks (crosses B6). It assigns the Compute SA as the VMs' identity — the VMs boot as the Compute SA, never the Workspace SA.",
@@ -438,7 +438,7 @@
 
   var notebookStages = [
     { id: "N1", title: "N1 · Analyst submits a command", team: "data",
-      desc: "A notebook cell / SQL query goes from the analyst's browser over the frontend PSC wire (F1, crosses at B1) to the workspace — the cluster is already RUNNING. Okta/OIDC auth happens on a back-channel, not on this wire.",
+      desc: "A notebook cell / SQL query goes from the analyst's browser over the frontend PSC wire (F1) to the workspace — the cluster is already RUNNING. Okta/OIDC auth happens on a back-channel, not on this wire.",
       flows: ["n1", "n1b"], reveal: ["drivervm", "execvm"], focus: ["admin", "frontendpsc", "plproxy", "controlplane"] },
     { id: "N2", title: "N2 · Driver gets context + a down-scoped token", team: "data",
       desc: "The running cluster calls the control plane over the frontend wire (F4) for UC metadata and a down-scoped storage token. The SCC relay (F5, TCP 6666) is the always-cluster-initiated control channel.",
