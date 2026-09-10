@@ -32,6 +32,15 @@
     { id: "maildata",  step: "0", x: 770, y: 703, w: 410, h: 337, label: "YAHOO MAIL DATA PROJECTS (EXISTING)", cls: "frame" },
     { id: "dbx",       step: "0", x: 1240, y: 140, w: 400, h: 820, label: "DATABRICKS-OWNED GCP PROJECTS", label2: "— OUTSIDE THE PERIMETER", cls: "frame" },
     { id: "internet",  step: "0", x: 1240, y: 972, w: 400, h: 110, label: "PUBLIC INTERNET", cls: "frame" },
+    { id: "uc",        step: "3", x: 1265, y: 688, w: 350, h: 266, label: "UNITY CATALOG — METASTORE", cls: "subframe",
+      detail: {
+        what: "The account-level Unity Catalog metastore. In the data-access phase it gains two storage credentials (each generating its own Databricks GCP SA) and two external locations that give the workspace governed access to GCS.",
+        owner: "data",
+        extra: [
+          { label: "Read-only", body: "credential → vended SA with <code>objectViewer</code> + <code>legacyBucketReader</code> on the data-lake bucket; read-only external location over <code>gs://…</code>." },
+          { label: "Read-write", body: "credential → vended SA with <code>objectAdmin</code> on the analytics bucket; read-write external location." } ],
+        conn: ["Each vended SA reaches its bucket through a VPC-SC ingress rule (RO: read methods · RW: all)"],
+        repo: "data-access/" } },
     { id: "pscsubnet", step: "2.2", x: 890, y: 225, w: 270, h: 265, label: "PSC SUBNET x.x.x.x/28 (min /28)", cls: "subframe" },
     { id: "nodesubnet",step: "2.2", x: 350, y: 420, w: 510, h: 122, label: "NODE SUBNET x.x.x.x/y · NPIP · PGA ON", cls: "subframe",
       detail: {
@@ -79,27 +88,41 @@
       detail: {
         what: "Databricks-side PSC producer for the secure cluster connectivity (SCC) relay — how clusters dial home with no inbound path.",
         conn: ["Carries SCC relay · TCP 6666 · always cluster-initiated"] } },
-    { id: "controlplane", step: "0", x: 1265, y: 490, w: 350, h: 175, title: "Regional control plane",
+    { id: "controlplane", step: "0", x: 1265, y: 490, w: 350, h: 85, title: "Regional control plane",
       lines: ["Workspace UI/API · Cluster Manager · Jobs"],
       detail: {
         what: "The Databricks-managed regional services for this workspace: Workspace UI/API, the Cluster Manager that launches compute (acting as the Workspace SA), the Job Scheduler, and more.",
         conn: ["Reached only via the frontend PSC endpoint — no public ingress", "Control-plane data (notebooks, results, secrets) is CMEK-encrypted (2.7)"] } },
-    { id: "accountapi", step: "0", x: 1265, y: 680, w: 350, h: 140, title: "Account API",
+    { id: "accountapi", step: "0", x: 1265, y: 585, w: 350, h: 83, title: "Account API",
       lines: ["Provisioning + IdP sync"],
       detail: {
         what: "The account-level control plane at accounts.gcp.databricks.com. It provisions workspaces and syncs identities.",
         conn: ["Workspace provisioning (creates the workspace in 2.4)", "IdP sync: Okta → Account API", "Auth: account admin via Google OIDC tokens"] } },
-    { id: "uc", step: "3", x: 1265, y: 838, w: 350, h: 100, title: "Unity Catalog — metastore",
-      lines: ["RO cred → data lake · RW cred → analytics", "+ external locations & catalogs"],
+    // Unity Catalog objects (inside the uc frame), created at step 3.
+    { id: "sc_ro", step: "3", x: 1280, y: 712, w: 320, h: 52, title: "Storage credential · source_data_ro",
+      lines: [], identity: "IDENTITY · vended Databricks GCP SA (RO)",
       detail: {
-        what: "The account-level Unity Catalog metastore. In the data-access phase it gains two storage credentials — each generating its own Databricks GCP SA — and two external locations that give the workspace governed access to GCS.",
+        what: "Read-only storage credential. Databricks generates a GCP service account, granted objectViewer + legacyBucketReader on the existing data-lake bucket.",
         owner: "data",
-        extra: [
-          { label: "Read-only credential → data lake", body: "vended SA granted <code>roles/storage.objectViewer</code> + <code>legacyBucketReader</code>; read-only external location + <code>source_data_ro</code> catalog (namespace only)." },
-          { label: "Read-write credential → analytics", body: "vended SA granted <code>roles/storage.objectAdmin</code> on the analytics bucket (created here); read-write external location + managed <code>analytics</code> catalog (storage_root on the bucket)." },
-          { label: "Automation (least-privilege)", body: "a catalog automation SP holds scoped <code>CREATE_STORAGE_CREDENTIAL</code> / <code>CREATE_EXTERNAL_LOCATION</code> / <code>CREATE_CATALOG</code> — not metastore admin — and owns what it creates." } ],
-        conn: ["Each vended SA reaches its bucket through a VPC-SC ingress rule (RO: read methods · RW: all)"],
-        repo: "data-access/" } },
+        perms: ["roles/storage.objectViewer", "roles/storage.legacyBucketReader"], permsLabel: " · on the data-lake bucket",
+        conn: ["Admitted by a VPC-SC ingress rule scoped to read methods (objects.get/list)"] } },
+    { id: "sc_rw", step: "3", x: 1280, y: 772, w: 320, h: 52, title: "Storage credential · analytics_rw",
+      lines: [], identity: "IDENTITY · vended Databricks GCP SA (RW)",
+      detail: {
+        what: "Read-write storage credential. Its own generated GCP service account is granted objectAdmin on the analytics bucket (created in this phase).",
+        owner: "data",
+        perms: ["roles/storage.objectAdmin", "roles/storage.legacyBucketReader"], permsLabel: " · on the analytics bucket",
+        conn: ["Admitted by a VPC-SC ingress rule (all methods)"] } },
+    { id: "el_ro", step: "3", x: 1280, y: 832, w: 320, h: 52, title: "External location · source_data",
+      lines: ["read-only · gs://…/data-lake"],
+      detail: {
+        what: "Read-only external location over the data-lake bucket, using the read-only storage credential. Backs the source_data_ro catalog (namespace only; external tables registered later).",
+        owner: "data" } },
+    { id: "el_rw", step: "3", x: 1280, y: 892, w: 320, h: 52, title: "External location · analytics",
+      lines: ["read-write · gs://…/analytics"],
+      detail: {
+        what: "Read-write external location over the analytics bucket, using the read-write storage credential. Backs the managed analytics catalog (its storage_root).",
+        owner: "data" } },
 
     // Host project — network (2.2)
     { id: "dnszone", step: "2.2", x: 350, y: 235, w: 250, h: 155, title: "Private DNS zone",
@@ -258,13 +281,16 @@
   // grant edges from the Workspace SA into the perimeter. Routed via the right gap +
   // bottom corridor so they never cross the Yahoo Mail data projects frame.
   var edges = [
-    { id: "e25a", step: "2.5", d: "M1265,198 H1232 V1076 H308 V802 H350", label: "2.5 · project role", lx: 320, ly: 802, vertical: true },
-    { id: "e25b", step: "2.5", d: "M1265,212 H1225 V1048 H758 V864 H720", label: "2.5 · resource role", lx: 760, ly: 864, vertical: true },
-    { id: "e26", step: "2.6", d: "M1265,235 H1200 V552 H620 V516", label: "2.6 · network role → WS SA", lx: 770, ly: 548 },
-    { id: "e27", step: "2.7", d: "M1265,262 H1240 V1062 H535 V1020", label: "2.7 · CMEK MANAGED_SERVICES → WS SA", lx: 600, ly: 1082 },
-    // data access (step 3): vended UC storage-credential SAs granted GCS access on the buckets
-    { id: "e_ro", step: "3", d: "M1265,860 H1198 V786 H1160", label: "RO · objectViewer", lx: 1198, ly: 786, vertical: true },
-    { id: "e_rw", step: "3", d: "M1265,900 H1216 V878 H1160", label: "RW · objectAdmin", lx: 1216, ly: 878, vertical: true }
+    // Workspace-SA operator grants: accumulate 2.5 → 2.7, then all clear at 2.8 (RUNNING).
+    { id: "e25a", step: "2.5", until: "2.7", d: "M1265,198 H1232 V1076 H308 V802 H350", label: "2.5 · project role", lx: 320, ly: 802, vertical: true },
+    { id: "e25b", step: "2.5", until: "2.7", d: "M1265,212 H1225 V1048 H758 V864 H720", label: "2.5 · resource role", lx: 760, ly: 864, vertical: true },
+    { id: "e26", step: "2.6", until: "2.7", d: "M1265,235 H1200 V552 H620 V516", label: "2.6 · network role → WS SA", lx: 770, ly: 548 },
+    { id: "e27", step: "2.7", until: "2.7", d: "M1265,262 H1240 V1062 H535 V1020", label: "2.7 · CMEK MANAGED_SERVICES → WS SA", lx: 600, ly: 1082 },
+    // data access (step 3): storage credentials + external locations wired to their buckets.
+    { id: "e_sc_ro", step: "3", until: "3", d: "M1280,738 H1240 V768 H1160", label: "objectViewer", lx: 1240, ly: 742, vertical: true },
+    { id: "e_el_ro", step: "3", until: "3", d: "M1280,858 H1224 V805 H1160", label: "" },
+    { id: "e_sc_rw", step: "3", until: "3", d: "M1280,798 H1256 V860 H1160", label: "objectAdmin", lx: 1256, ly: 815, vertical: true },
+    { id: "e_el_rw", step: "3", until: "3", d: "M1280,918 H1236 V898 H1160", label: "" }
   ];
 
   // PSC "wires": consumer endpoint → producer service attachment. Dashed/pending when
@@ -330,10 +356,10 @@
       states: { wssa: "workspace: RUNNING" } },
 
     { id: "3", label: "Data access — UC catalogs", short: "Data access", team: "data", repo: "data-access/",
-      narrative: "Data Platform — with the bucket owners and Cloud/Network Security — wires the running workspace to data through Unity Catalog. The account admin first grants a catalog automation SP scoped CREATE_STORAGE_CREDENTIAL / CREATE_EXTERNAL_LOCATION / CREATE_CATALOG (not metastore admin). Two storage credentials are then created, each generating its own Databricks GCP SA: the read-only credential gets objectViewer + legacyBucketReader on the existing data-lake bucket; the read-write credential gets objectAdmin on a new analytics bucket. Each SA is admitted by a VPC-SC ingress rule (read-only: read methods; read-write: all) and exposed as an external location + catalog.",
-      privileges: ["Databricks account admin (grants scoped CREATE_*)", "storage IAM admin (bucket owners)", "accesscontextmanager.policyAdmin (perimeter)"],
-      creates: ["uc"], changed: ["datalake", "analytics"], edges: ["e_ro", "e_rw"],
-      creatLabel: ["Unity Catalog: 2 storage credentials", "2 external locations + catalogs", "GCS grants: RO objectViewer · RW objectAdmin", "VPC-SC ingress rules (RO reads · RW all)"] },
+      narrative: "Data Platform — with the bucket owners and Cloud/Network Security — wires the running workspace to data through Unity Catalog. Two storage credentials are created, each generating its own Databricks GCP SA: the read-only credential gets objectViewer + legacyBucketReader on the existing data-lake bucket; the read-write credential gets objectAdmin on a new analytics bucket. Each SA is admitted by a VPC-SC ingress rule (read-only: read methods; read-write: all) and exposed as an external location.",
+      privileges: ["storage IAM admin (bucket owners)", "accesscontextmanager.policyAdmin (perimeter)"],
+      creates: ["uc", "sc_ro", "sc_rw", "el_ro", "el_rw"], changed: ["datalake", "analytics"], edges: ["e_sc_ro", "e_el_ro", "e_sc_rw", "e_el_rw"],
+      creatLabel: ["2 storage credentials (RO + RW)", "2 external locations (RO + RW)", "GCS grants: RO objectViewer · RW objectAdmin", "VPC-SC ingress rules (RO reads · RW all)"] },
 
     { id: "end", label: "End state — least privilege", short: "End state", team: null,
       narrative: "The workspace is RUNNING. The bootstrap identity is now torn down: the workspace-creator SA and its two read-only creator roles (service + host) are deleted — they were only needed to create the workspace. What remains is the least-privilege steady state — the Workspace SA with its operator roles, the Compute SA, and the CMEK key.",
@@ -348,7 +374,7 @@
     // cluster launch
     l1a:   { c: "#2a78d6", d: "M270,205 H872 V305 H901", m: "b", label: "L1 · clusters/create · TLS 443", lx: 780, ly: 190, cross: [[300, 205, "B1"]] },
     l1b:   { c: "#2a78d6", d: "M1145,305 H1205 V332 H1263", m: "b", label: "B2", lx: 1180, ly: 300, cross: [[1205, 332, "B2"]] },
-    l2:    { c: "#eb6834", d: "M1263,600 H1225 V1064 H755 V727 H722", m: "o", label: "L2 · GCE: launch VMs — as the Workspace SA", lx: 985, ly: 1058, cross: [[1210, 1064, "B6"]] },
+    l2:    { c: "#eb6834", d: "M1263,540 H1225 V1064 H755 V727 H722", m: "o", label: "L2 · GCE: launch VMs — as the Workspace SA", lx: 985, ly: 1058, cross: [[1210, 1064, "B6"]] },
     boot:  { c: "#eb6834", dash: "6 4", d: "M480,560 V540", m: "o", label: "VMs boot Runtime + Photon — as Compute SA", lx: 545, ly: 556 },
     tunnel:{ c: "#c3c2b7", dash: "4 3", d: "M450,420 V393", m: "g", label: "resolve tunnel.<region>", lx: 462, ly: 410 },
     l3:    { c: "#eb6834", d: "M860,505 H882 V405 H901", m: "o", label: "L3 · 6666", lx: 874, ly: 470 },
@@ -362,9 +388,9 @@
     f8:    { c: "#1baf7a", d: "M745,538 V846 H784", m: "a", label: "F8 · write (UC RW SA)", lx: 515, ly: 712, cross: [[786, 846, "ingress"]] },
     ret:   { c: "#2a78d6", dash: "5 4", d: "M901,320 H860 V472 H832", m: "b", label: "results → analyst (nothing data-bearing via control plane)", lx: 690, ly: 700 },
     // 2.4 read-only "verify settings" sub-animation (Account API, via the creator role)
-    v_net:  { c: "#8a8880", dash: "5 4", d: "M1265,700 H1216 V332 H1149", m: "g", label: "verify · network / PSC (read-only)", lx: 1120, ly: 700 },
-    v_svc:  { c: "#8a8880", dash: "5 4", d: "M1265,758 H1210 V1068 H648 V1040", m: "g", label: "verify · service project (read-only)", lx: 860, ly: 1063 },
-    v_cmek: { c: "#8a8880", dash: "5 4", d: "M1265,772 H1200 V1078 H318 V994 H350", m: "g", label: "verify · CMEK (read-only)", lx: 430, ly: 1088 }
+    v_net:  { c: "#8a8880", dash: "5 4", d: "M1265,610 H1216 V332 H1149", m: "g", label: "verify · network / PSC (read-only)", lx: 1120, ly: 600 },
+    v_svc:  { c: "#8a8880", dash: "5 4", d: "M1265,640 H1210 V1068 H648 V1040", m: "g", label: "verify · service project (read-only)", lx: 860, ly: 1063 },
+    v_cmek: { c: "#8a8880", dash: "5 4", d: "M1265,655 H1200 V1078 H318 V994 H350", m: "g", label: "verify · CMEK (read-only)", lx: 430, ly: 1088 }
   };
 
   var launchStages = [
@@ -487,10 +513,12 @@
     var g = E("g", { class: "flowg", "data-step": e.step }, layE);
     E("path", { class: "flow", d: e.d, stroke: "#eb6834", "stroke-width": 1.6, "stroke-dasharray": "5 4",
       fill: "none", "marker-end": "url(#arr-o)", opacity: 0.75 }, g);
-    var lw = e.label.length * fs(6) + 16;
-    var lg = e.vertical ? E("g", { transform: "rotate(-90 " + e.lx + " " + e.ly + ")" }, g) : g;
-    E("rect", { x: e.lx - lw / 2, y: e.ly - fs(11), width: lw, height: fs(16.5), rx: 10, fill: "#fff4ef", stroke: "#f4c7b3" }, lg);
-    txt(lg, e.lx, e.ly, e.label, { "font-size": fs(10.5), "font-weight": 600, "text-anchor": "middle", fill: "#b3421f" });
+    if (e.label) {
+      var lw = e.label.length * fs(6) + 16;
+      var lg = e.vertical ? E("g", { transform: "rotate(-90 " + e.lx + " " + e.ly + ")" }, g) : g;
+      E("rect", { x: e.lx - lw / 2, y: e.ly - fs(11), width: lw, height: fs(16.5), rx: 10, fill: "#fff4ef", stroke: "#f4c7b3" }, lg);
+      txt(lg, e.lx, e.ly, e.label, { "font-size": fs(10.5), "font-weight": 600, "text-anchor": "middle", fill: "#b3421f" });
+    }
     elByEdge[e.id] = g;
   }
 
@@ -601,10 +629,10 @@
     for (var si = 0; si <= maxIdx && si < steps.length; si++) {
       (steps[si].deletes || []).forEach(function (id) { toggle(elByNode[id] || elByContainer[id], false); });
     }
-    // each grant edge shows only on its own step (a transient "what's granted here"
-    // annotation) — every step stays focused on its grant, and the RUNNING / data-access /
-    // End states show no grant lines.
-    edges.forEach(function (e) { toggle(elByEdge[e.id], oi(e.step) === maxIdx); });
+    // grant edges show cumulatively from their step through their `until` step, then clear:
+    // the WS-SA operator grants pile up 2.5→2.7 (all the perms this SA needs) and vanish at
+    // 2.8; the data-access grants show at step 3. RUNNING / End show none.
+    edges.forEach(function (e) { toggle(elByEdge[e.id], maxIdx >= oi(e.step) && maxIdx <= oi(e.until)); });
     updateWires(maxIdx);
   }
 
