@@ -437,9 +437,12 @@
     n1:    { c: "#2a78d6", d: "M270,180 H872 V305 H901", m: "b", label: "N1 · notebook command · TLS 443", lx: 571, ly: 180, cross: [[300, 180, "B1"]] },
     n1b:   { c: "#2a78d6", d: "M1145,305 H1200 V376 H1264", m: "b", label: "" },
     // N2 command dispatch: ngrok -> backend PSC endpoint -> DRIVER (right VM), over the SCC relay (6666)
-    nb_dispatch: { c: "#eb6834", d: "M905,428 H866 V510 H830", m: "o", label: "N2 · command → driver · 6666", lx: 690, ly: 346 },
+    nb_scc_in:   { c: "#eb6834", d: "M1264,464 H1200 V420 H1147", m: "o", label: "" },
+    nb_dispatch: { c: "#eb6834", d: "M905,428 H866 V510 H830", m: "o", vertical: true, label: "N2 · command → driver · 6666", lx: 861, ly: 500 },
     // N3 request: driver -> frontend PSC endpoint -> plproxy (workspace REST/API, 443)
-    nb_req:      { c: "#eb6834", dash: "6 4", d: "M830,458 H882 V320 H905", m: "o", label: "N3 · request table from UC · REST/API", lx: 690, ly: 370 },
+    nb_req:      { c: "#eb6834", dash: "6 4", d: "M830,458 H882 V320 H905", m: "o", vertical: true, label: "N3 · request table from UC · REST/API", lx: 889, ly: 378 },
+    nb_req2:     { c: "#eb6834", dash: "6 4", d: "M1145,305 H1200 V376 H1264", m: "o", label: "" },
+    nb_req3:     { c: "#eb6834", dash: "6 4", d: "M1622,376 H1632 V700 H1615", m: "o", label: "" },
     // N4 vend: UC mints a down-scoped token, up to the control plane
     nb_vend:     { c: "#eb6834", d: "M1265,700 H1250 V545 H1265", m: "o", vertical: true, label: "N4 · UC mints down-scoped token", lx: 1250, ly: 632 },
     // N5 context: plproxy -> frontend PSC endpoint -> driver (REST response — no 6666)
@@ -473,11 +476,11 @@
       desc: "A notebook cell / SQL query goes from the analyst's browser over the frontend PSC wire (443) to the workspace — the cluster is already RUNNING. Okta/OIDC auth is on a back-channel, not this wire.",
       flows: ["n1", "n1b"], reveal: ["drivervm", "execvm"], focus: ["admin", "frontendpsc", "plproxy", "controlplane"] },
     { id: "N2", title: "N2 · Control plane dispatches the command to the driver", team: "data",
-      desc: "The control plane can't connect IN to the cluster (no public IP, no inbound). It places the command on the SCC relay (TCP 6666, backend PSC → ngrok), and the driver picks it up over the outbound connection it opened at launch — the channel L3 built. Nothing connects inward.",
-      flows: ["nb_dispatch"], focus: ["controlplane", "backendpsc", "ngrok", "drivervm"] },
+      desc: "The control plane can't connect IN to the cluster (no public IP, no inbound). It places the command on the SCC relay (TCP 6666) — out through ngrok to the backend PSC endpoint — and the driver picks it up over the outbound connection it opened at launch. Nothing connects inward.",
+      flows: ["nb_scc_in", "nb_dispatch"], focus: ["controlplane", "backendpsc", "ngrok", "drivervm"] },
     { id: "N3", title: "N3 · Driver asks UC for the table", team: "data",
-      desc: "Executing the command, the driver needs to read a table, so it calls Unity Catalog (control plane) over the same SCC relay (6666), asking to read the external location.",
-      flows: ["nb_req"], focus: ["drivervm", "backendpsc", "controlplane"] },
+      desc: "Executing the command, the driver needs to read a table, so it calls Unity Catalog via the workspace REST API — driver → frontend PSC endpoint → plproxy → UC (443, not the SCC relay).",
+      flows: ["nb_req", "nb_req2", "nb_req3"], focus: ["drivervm", "frontendpsc", "controlplane"] },
     { id: "N4", title: "N4 · UC checks the grant & vends a down-scoped token", team: "data",
       desc: "Unity Catalog verifies the querying principal holds the privilege, then uses the storage credential's vended GCP SA to mint a short-lived, path-scoped GCS token — read-only or read-write per the credential. No standing key leaves UC.",
       flows: ["nb_vend"], focus: ["controlplane", "sc_ro", "sc_rw"] },
@@ -845,6 +848,8 @@
     idx = Math.max(0, Math.min(list.length - 1, i));
     clearFlows(); clearFocus();
     showFullTopology();
+    // notebook tab shows the PSC legs as colored command/request arrows, so hide the green connectivity wires there
+    if (tab === "notebook") pscWires.forEach(function (w) { var e = elByWire[w.id]; if (e) toggle(e.g, false); });
     // reveal runtime nodes up to this stage; hide beyond
     var revealed = {};
     for (var s = 0; s <= idx; s++) (list[s].reveal || []).forEach(function (id) { revealed[id] = true; });
