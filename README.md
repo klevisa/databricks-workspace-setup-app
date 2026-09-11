@@ -7,9 +7,10 @@ An interactive, client-side walkthrough of a **least-privilege Databricks worksp
    **team**, the **privileges** that team uses, and the **resources it creates** — and the
    topology diagram fills in as you go (PSC endpoints flip PENDING → ACCEPTED, DNS records
    appear, operator-role grants draw in, the workspace reaches RUNNING).
-2. **Cluster launch** — the L1 → L2 → L3 launch flow animated over the completed topology:
-   the analyst's `clusters/create`, the control plane launching VMs *as the Workspace SA*,
-   and the cluster dialing home over the SCC relay.
+2. **Cluster launch** — the L0 → L3 launch flow animated over the completed topology:
+   the analyst signing in over SSO (Okta, SAML/OIDC — never crossing the perimeter), the
+   analyst's `clusters/create`, the control plane launching VMs *as the Workspace SA*, and
+   the cluster dialing home over the SCC relay.
 3. **Notebook command** — steady-state runtime: a command in, UC metadata + a down-scoped
    token, a governed read through the VPC-SC ingress gate (as the vended UC SA), Photon
    executing, results back — nothing data-bearing crossing the control plane.

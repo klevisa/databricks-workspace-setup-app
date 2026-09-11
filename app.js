@@ -70,6 +70,18 @@
         what: "Yahoo admins and analysts. They reach the workspace over a private route only — there is no public front door.",
         conn: ["Browser / REST API / CLI → frontend PSC endpoint · TLS 443", "Auth: Okta session / PAT (OIDC on a back-channel)"] } },
 
+    // Identity provider — the SSO authority (shown only in the launch tab, at L0).
+    // Lives in the left "user access" lane, OUTSIDE the perimeter: the SSO handshake is
+    // browser <-> Okta (public) and never touches Yahoo's VPC-SC boundary.
+    { id: "okta", step: "run", x: 40, y: 300, w: 230, h: 92, title: "Okta — identity provider", dimmable: true, hideAppears: true,
+      lines: ["SSO · SAML 2.0 / OIDC", "Users synced via SCIM / AIM"],
+      detail: {
+        what: "The customer's identity provider. Databricks on GCP authenticates users against Okta through account-level SSO (SAML 2.0 or OIDC) — it is NOT forced through Google accounts. On login the browser is redirected here; Okta validates the user (and MFA) and returns a signed assertion, which Databricks verifies before creating the session.",
+        extra: [
+          { label: "Provisioning vs. authentication — two separate configs", body: "<strong>SCIM</strong> pushes users/groups into Databricks; <strong>Automatic Identity Management (AIM)</strong> instead reads the IdP directory directly (just-in-time). Either way this is account-level, done out-of-band BEFORE login — it decides <em>who exists</em>. <strong>SSO</strong> is a distinct setting that decides <em>whether a login is valid</em>." },
+          { label: "Okta's dual role under AIM", body: "With AIM, Okta is both the SSO auth path AND the directory Databricks reads for identities/groups — but the credential check is still the SSO redirect; the directory read is a separate interaction." } ],
+        conn: ["SSO handshake: browser ↔ Okta (SAML/OIDC) — public, never through the perimeter", "Provisioning: SCIM push OR AIM directory read (account-level, out-of-band)", "Validates the session BEFORE any clusters/create or query"] } },
+
     // Databricks-owned side
     { id: "wssa", step: "2.4", x: 1265, y: 180, w: 350, h: 95, title: "Workspace SA", accent: true,
       lines: ["The launcher (control-plane-owned)"],
@@ -423,6 +435,9 @@
 
   /* ---------------- flows (tabs 2 & 3) ---------------- */
   var flows = {
+    // SSO sign-in (user access) — browser <-> Okta ONLY; public/direct, never crosses the
+    // VPC-SC perimeter and does not reach into the workspace. Reused by launch L0 + notebook N1.
+    l0_sso:  { c: "#2a78d6", d: "M155,260 V300", m: "b", label: "SSO — Okta validates", lx: 155, ly: 280 },
     // cluster launch
     l1a:   { c: "#2a78d6", d: "M270,180 H872 V305 H901", m: "b", label: "L1 · clusters/create · TLS 443", lx: 571, ly: 180, cross: [[300, 180, "B1"]] },
     l1b:   { c: "#2a78d6", d: "M1145,305 H1200 V376 H1264", m: "b", label: "" },
@@ -463,8 +478,11 @@
   };
 
   var launchStages = [
+    { id: "L0", title: "L0 · Analyst signs in (SSO)", team: "data",
+      desc: "Before any command, the analyst authenticates. Databricks-on-GCP uses account-level SSO (SAML 2.0 / OIDC) to Okta — the browser is redirected to Okta, which validates the user (plus MFA) and returns a signed assertion Databricks verifies before creating the session. Users were provisioned ahead of time, out-of-band, via SCIM or Automatic Identity Management (AIM) — an account-level step, not part of this workspace build. The whole handshake is browser↔Okta (public): it never touches your VPC-SC perimeter, and nothing here reaches into the workspace yet — that starts at L1.",
+      flows: ["l0_sso"], reveal: ["okta"], focus: ["admin", "okta"] },
     { id: "L1", title: "L1 · Analyst starts a cluster", team: "data",
-      desc: "POST /api/2.x/clusters/create over TLS 443 crosses the perimeter and the frontend PSC wire to the control-plane cluster manager. Auth = Okta session / PAT.",
+      desc: "Now authenticated, the analyst issues POST /api/2.x/clusters/create over TLS 443 — it crosses the perimeter and the frontend PSC wire to the control-plane cluster manager.",
       flows: ["l1a", "l1b"], focus: ["admin", "frontendpsc", "plproxy", "controlplane"] },
     { id: "L2", title: "L2 · Cluster manager launches VMs", team: "data",
       desc: "Acting AS the Workspace SA (control-plane-owned launcher), the cluster manager calls the GCE API to create driver + executor VMs in the service project with CMEK-encrypted disks. It assigns the Compute SA as the VMs' identity — the VMs boot as the Compute SA, never the Workspace SA. The launch crosses the perimeter through the VPC-SC ingress rule created at 2.8 (Workspace SA, from the regional control plane).",
@@ -476,8 +494,8 @@
 
   var notebookStages = [
     { id: "N1", title: "N1 · Analyst submits a command", team: "data",
-      desc: "A notebook cell / SQL query goes from the analyst's browser over the frontend PSC wire (443) to the workspace — the cluster is already RUNNING. Okta/OIDC auth is on a back-channel, not this wire.",
-      flows: ["n1", "n1b"], reveal: ["drivervm", "execvm"], focus: ["admin", "frontendpsc", "plproxy", "controlplane"] },
+      desc: "A notebook cell / SQL query goes from the analyst's browser over the frontend PSC wire (443) to the workspace — the cluster is already RUNNING. The analyst is SSO-validated against Okta (SAML 2.0 / OIDC), shown here on the browser↔IdP side-channel — that handshake is public and never crosses the perimeter; the command itself rides the frontend wire.",
+      flows: ["l0_sso", "n1", "n1b"], reveal: ["okta", "drivervm", "execvm"], focus: ["admin", "okta", "frontendpsc", "plproxy", "controlplane"] },
     { id: "N2", title: "N2 · Control plane dispatches the command to the driver", team: "data",
       desc: "The control plane can't connect IN to the cluster (no public IP, no inbound). It places the command on the SCC relay (TCP 6666) — out through ngrok to the backend PSC endpoint — and the driver picks it up over the outbound connection it opened at launch. Nothing connects inward.",
       flows: ["nb_scc_in", "nb_dispatch"], focus: ["controlplane", "backendpsc", "ngrok", "drivervm"] },
@@ -823,7 +841,9 @@
   function focusNodes(ids) {
     if (!ids) return;
     nodes.forEach(function (n) {
-      var g = elByNode[n.id]; if (!g || n.step === "run") { if (g) g.classList.remove("dim"); return; }
+      // runtime compute (driver/exec VMs) stays bright once launched; a run-node flagged
+      // `dimmable` (Okta) recedes like any other node when it's not in the stage's focus.
+      var g = elByNode[n.id]; if (!g || (n.step === "run" && !n.dimmable)) { if (g) g.classList.remove("dim"); return; }
       if (g.classList.contains("show")) g.classList.toggle("dim", ids.indexOf(n.id) === -1);
     });
     ids.forEach(function (id) {
@@ -859,10 +879,10 @@
     showFullTopology();
     // notebook tab shows the PSC legs as colored command/request arrows, so hide the green connectivity wires there
     if (tab === "notebook") pscWires.forEach(function (w) { var e = elByWire[w.id]; if (e) toggle(e.g, false); });
-    // reveal runtime nodes up to this stage; hide beyond
+    // reveal runtime ("run") nodes up to this stage; hide beyond
     var revealed = {};
     for (var s = 0; s <= idx; s++) (list[s].reveal || []).forEach(function (id) { revealed[id] = true; });
-    ["drivervm", "execvm"].forEach(function (id) { toggle(elByNode[id], !!revealed[id], false); });
+    nodes.forEach(function (n) { if (n.step === "run") toggle(elByNode[n.id], !!revealed[n.id], false); });
     // draw flows cumulatively; animate current stage
     var d = 0;
     for (var k = 0; k <= idx; k++) {
@@ -970,7 +990,7 @@
     }
     if (d.repo) h += '<p class="note">Repo config: <code>' + d.repo + '</code></p>';
     if (d.note) h += '<p class="note">' + d.note + '</p>';
-    h += '<p class="muted">Appears: ' + (n.step === "run" ? "at cluster launch" : (n.step === "0" ? "already exists" : "step " + n.step)) + '</p>';
+    if (!n.hideAppears) h += '<p class="muted">Appears: ' + (n.step === "run" ? "at cluster launch" : (n.step === "0" ? "already exists" : "step " + n.step)) + '</p>';
     p.innerHTML = h;
   }
 
