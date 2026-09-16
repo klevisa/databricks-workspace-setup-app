@@ -16,6 +16,12 @@
   var FONT_SCALE = 1.2;
   function fs(px) { return Math.round(px * FONT_SCALE * 10) / 10; }
 
+  /* Identity ownership tints (opaque box backgrounds) — set via a node's `idOwner`.
+     Databricks-owned identities vs Yahoo-owned identities (for network-policy tagging). */
+  var ID_DBX = "#FADBD5";    // Databricks-owned (red family)
+  var ID_YAHOO = "#E7DCF6";  // Yahoo-owned (purple family)
+  function idFill(n) { return n.idOwner === "dbx" ? ID_DBX : (n.idOwner === "yahoo" ? ID_YAHOO : "#ffffff"); }
+
   var TEAM = {
     foundation: { name: "Cloud Foundation / Landing Zone", color: "#5b6b8c" },
     network:    { name: "Network Engineering",             color: "#2a78d6" },
@@ -83,7 +89,7 @@
         conn: ["SSO handshake: browser ↔ Okta (SAML/OIDC) — public, never through the perimeter", "Provisioning: SCIM push OR AIM directory read (account-level, out-of-band)", "Validates the session BEFORE any clusters/create or query"] } },
 
     // Databricks-owned side
-    { id: "wssa", step: "2.4", x: 1265, y: 180, w: 350, h: 95, title: "Workspace SA", accent: true,
+    { id: "wssa", step: "2.4", x: 1265, y: 180, w: 350, h: 95, title: "Workspace SA", accent: true, idOwner: "dbx",
       lines: ["The launcher (control-plane-owned)"],
       identity: ["IDENTITY", "cluster launcher"],
       detail: {
@@ -111,14 +117,14 @@
         what: "The account-level control plane at accounts.gcp.databricks.com. It provisions workspaces and syncs identities.",
         conn: ["Workspace provisioning (creates the workspace in 2.4)", "IdP sync: Okta → Account API"] } },
     // Unity Catalog objects (inside the uc frame), created at step 3.
-    { id: "sc_ro", step: "3", x: 1280, y: 712, w: 320, h: 52, title: "Storage credential · source_data_ro",
+    { id: "sc_ro", step: "3", x: 1280, y: 712, w: 320, h: 52, title: "Storage credential · source_data_ro", idOwner: "dbx",
       lines: [], identity: "IDENTITY · vended Databricks GCP SA (RO)",
       detail: {
         what: "Read-only storage credential. Databricks generates a GCP service account, granted objectViewer + legacyBucketReader on the existing data-lake bucket.",
         owner: "data",
         perms: ["roles/storage.objectViewer", "roles/storage.legacyBucketReader"], permsLabel: " · on the data-lake bucket",
         conn: ["Admitted by a VPC-SC ingress rule scoped to read methods (objects.get/list)"] } },
-    { id: "sc_rw", step: "3", x: 1280, y: 832, w: 320, h: 52, title: "Storage credential · analytics_rw",
+    { id: "sc_rw", step: "3", x: 1280, y: 832, w: 320, h: 52, title: "Storage credential · analytics_rw", idOwner: "dbx",
       lines: [], identity: "IDENTITY · vended Databricks GCP SA (RW)",
       detail: {
         what: "Read-write storage credential. Its own generated GCP service account is granted objectAdmin on the analytics bucket (created in this phase).",
@@ -152,7 +158,7 @@
 
     // The host-project half of the creator grant (a separate per-project custom role),
     // held by the same workspace-creator SA that lives in the service project.
-    { id: "crole_host", step: "2.2", x: 895, y: 463, w: 260, h: 82, title: "Creator role · host",
+    { id: "crole_host", step: "2.2", x: 895, y: 463, w: 260, h: 82, title: "Creator role · host", idOwner: "yahoo",
       lines: ["Read-only settings validation"],
       identity: ["IDENTITY", "held by the workspace-creator SA"],
       detail: {
@@ -177,7 +183,7 @@
         repo: "network/" } },
     // Workspace-SA network operator role — granted at 2.6, lives on the host node subnet.
     // deployOnly so it doesn't collide with the runtime VMs that fill this subnet in tabs 2/3.
-    { id: "netrole", step: "2.6", x: 366, y: 450, w: 345, h: 66, title: "Workspace operator network role", deployOnly: true,
+    { id: "netrole", step: "2.6", x: 366, y: 450, w: 345, h: 66, title: "Workspace operator network role", deployOnly: true, idOwner: "yahoo",
       lines: ["subnetworks.get / use (node subnet)"],
       identity: "IDENTITY · granted to the WS SA · node subnet",
       detail: {
@@ -188,23 +194,33 @@
         perms: ["compute.subnetworks.get", "compute.subnetworks.use"],
         repo: "post-workspace/iam.tf" } },
 
-    // Node subnet — runtime VMs (tabs 2/3)
-    { id: "drivervm", step: "run", x: 610, y: 452, w: 220, h: 86, title: "Driver VM",
+    // Runtime cluster VMs (tabs 2/3). The GCE VMs live in the SERVICE project (right above the
+    // Compute SA); only their networking lives in the node subnet, via NIC icons (dotted links).
+    { id: "drivervm", step: "run", x: 540, y: 600, w: 180, h: 64, title: "Driver VM",
       lines: ["Runtime + Photon"],
       detail: {
-        what: "The cluster driver in the private node subnet. Runs the Databricks Runtime and the Photon vectorized engine on CMEK-encrypted disks. Placed next to the PSC endpoints so it holds the control-plane connections.",
-        conn: ["Runs as the Compute SA (or a custom Cluster SA) — not the Workspace SA"] } },
-    { id: "execvm", step: "run", x: 370, y: 452, w: 220, h: 86, title: "Executor VMs × N",
-      lines: ["Spark executors (autoscaling)"],
+        what: "The cluster driver. Its GCE VM runs in the SERVICE project (right above the Compute SA); only its networking lives in the node subnet, via a NIC (dotted link). Runs the Databricks Runtime + Photon on CMEK-encrypted disks and holds the control-plane connections through its NIC.",
+        conn: ["Runs as the Compute SA (or a custom Cluster SA) — not the Workspace SA", "Control-plane traffic (SCC 6666 / REST 443) egresses via its node-subnet NIC"] } },
+    { id: "execvm", step: "run", x: 348, y: 600, w: 180, h: 64, title: "Executor VMs × N",
+      lines: ["Spark executors"],
       detail: {
-        what: "Autoscaling Spark executors running Photon on CMEK-encrypted disks in the node subnet. They do the actual data scan.",
+        what: "Autoscaling Spark executors. Their GCE VMs run in the SERVICE project; only their networking lives in the node subnet, via a NIC (dotted link). Photon on CMEK-encrypted disks — they do the actual data scan, reading GCS as the vended UC SA through the NIC.",
         conn: ["Run as the Compute SA (or a custom Cluster SA)", "Read Mail data as the vended UC storage-credential SA — never their own SA"] } },
+    // NICs — the VMs' networking presence in the node subnet (compute lives in the service project).
+    { id: "nic_exec", step: "run", x: 414, y: 462, w: 48, h: 48, img: "assets/network_card_icon.png", caption: "executor NIC",
+      detail: {
+        what: "The executor VMs' network interface in the node subnet (NPIP, PGA on). The executors' compute runs in the service project; only their networking lives here.",
+        conn: ["Linked to the executor VMs (dotted line)"] } },
+    { id: "nic_drv", step: "run", x: 606, y: 462, w: 48, h: 48, img: "assets/network_card_icon.png", caption: "driver NIC",
+      detail: {
+        what: "The driver VM's network interface in the node subnet (NPIP, PGA on). The driver's compute runs in the service project; only its networking lives here. All control-plane traffic egresses through this NIC.",
+        conn: ["SCC relay · TCP 6666 → backend PSC endpoint", "Workspace REST · 443 → frontend PSC endpoint", "Linked to the driver VM (dotted line)"] } },
 
     // Service project
     // The workspace-creator SA lives in the service project (bhavink convention). It is
     // granted TWO read-only per-project custom roles — this service role, plus the host
     // role (separate box in the host project). Those two roles are its read access.
-    { id: "creatorsa", step: "2.1", x: 790, y: 618, w: 370, h: 74, title: "Workspace-creator SA", accent: true,
+    { id: "creatorsa", step: "2.1", x: 790, y: 618, w: 370, h: 74, title: "Workspace-creator SA", accent: true, idOwner: "yahoo",
       lines: ["Impersonated to create the workspace (2.4)"],
       identity: "IDENTITY · holds the two read-only creator roles",
       detail: {
@@ -214,7 +230,7 @@
           { label: "Roles held", body: "Creator role · service (2.1) + Creator role · host (2.2). Both read-only." },
           { label: "How Databricks acts as it", body: "Your runner impersonates it (<code>serviceAccountTokenCreator</code>) to mint two short-lived Google tokens for the create call: an <strong>ID token</strong> (identity) and an <strong>OAuth access token</strong> in the <code>X-Databricks-GCP-SA-Access-Token</code> header. Databricks spends that access token to call your GCP APIs as this SA, then discards it — no key, no standing grant." } ],
         conn: ["SA: <code>databricks_account_admin_sa</code>", "Home project: your choice — it can be placed in the service project (not mandated by Databricks)", "Not the Workspace SA (minted in 2.4)"] } },
-    { id: "crole_svc", step: "2.1", x: 350, y: 600, w: 370, h: 76, title: "Creator role · service",
+    { id: "crole_svc", step: "2.1", x: 350, y: 600, w: 370, h: 76, title: "Creator role · service", idOwner: "yahoo",
       lines: ["Read-only settings validation"],
       identity: "IDENTITY · held by the workspace-creator SA",
       detail: {
@@ -224,7 +240,7 @@
         perms: ["cloudkms.cryptoKeys.getIamPolicy", "compute.projects.get", "iam.roles.get", "iam.serviceAccounts.get", "iam.serviceAccounts.getIamPolicy", "resourcemanager.projects.get", "resourcemanager.projects.getIamPolicy", "serviceusage.services.get", "serviceusage.services.list"],
         repo: "service-project/creator-roles.tf" } },
     // Workspace-SA operator roles — created + granted to the Workspace SA at 2.5.
-    { id: "projrole", step: "2.5", x: 350, y: 778, w: 370, h: 48, title: "Workspace operator project role",
+    { id: "projrole", step: "2.5", x: 350, y: 778, w: 370, h: 48, title: "Workspace operator project role", idOwner: "yahoo",
       lines: [],
       identity: "IDENTITY · granted to the WS SA · read + actAs",
       detail: {
@@ -234,7 +250,7 @@
         permsLabel: " (read + actAs)",
         perms: ["compute.disks.list", "compute.globalOperations.list", "compute.instances.list", "compute.regionOperations.list", "compute.regions.get", "compute.reservations.get", "compute.reservations.list", "compute.spotAssistants.get", "compute.zoneOperations.list", "compute.zones.get", "compute.zones.list", "iam.serviceAccounts.actAs", "resourcemanager.projects.get", "serviceusage.quotas.get", "serviceusage.services.list", "storage.buckets.list"],
         repo: "workspace-sa-roles/roles.tf" } },
-    { id: "resrole", step: "2.5", x: 350, y: 840, w: 370, h: 48, title: "Workspace operator resource role",
+    { id: "resrole", step: "2.5", x: 350, y: 840, w: 370, h: 48, title: "Workspace operator resource role", idOwner: "yahoo",
       lines: [],
       identity: "IDENTITY · granted to the WS SA · creates storage + VMs",
       detail: {
@@ -245,7 +261,7 @@
         perms: ["compute.disks.create", "compute.disks.delete", "compute.disks.get", "compute.disks.resize", "compute.disks.setLabels", "compute.disks.update", "compute.disks.use", "compute.disks.useReadOnly", "compute.instances.attachDisk", "compute.instances.create", "compute.instances.delete", "compute.instances.detachDisk", "compute.instances.get", "compute.instances.getGuestAttributes", "compute.instances.getSerialPortOutput", "compute.instances.setLabels", "compute.instances.setMetadata", "compute.instances.setServiceAccount", "compute.instances.setTags", "compute.instances.update", "storage.buckets.create", "storage.buckets.delete", "storage.buckets.get", "storage.buckets.getIamPolicy", "storage.buckets.setIamPolicy", "storage.buckets.update", "storage.multipartUploads.abort", "storage.multipartUploads.create", "storage.multipartUploads.list", "storage.multipartUploads.listParts", "storage.objects.create", "storage.objects.delete", "storage.objects.get", "storage.objects.list", "storage.objects.update"],
         extra: [ { label: "IAM condition — scoped to this workspace", body: "Bound project-wide but limited by an IAM condition to resources whose names carry both <code>databricks</code> and this workspace's id, so the SA can only touch this workspace's own buckets/disks/instances." } ],
         repo: "workspace-sa-roles/roles.tf" } },
-    { id: "computesa", step: "2.1", x: 350, y: 690, w: 370, h: 74, title: "Compute SA", accent: true,
+    { id: "computesa", step: "2.1", x: 350, y: 690, w: 370, h: 74, title: "Compute SA", accent: true, idOwner: "yahoo",
       lines: ["The VMs' runtime identity"],
       identity: "IDENTITY · not the launcher · minimal perms",
       detail: {
@@ -331,7 +347,7 @@
           { label: "Why us-central1 is dropped", body: "2.4's calls came from Databricks' <strong>us-central1</strong> account control plane (creation is account-level); 2.8 build + runtime come from the <strong>regional</strong> control plane instead. Once the workspace exists nothing originates from us-central1 — so drop that temporary pin and keep the standing regional one." },
           { label: "Into", body: "the service project · <code>storage</code>, <code>compute</code> (create buckets / disks / instances). Identity AND source must both match." } ],
         conn: ["Admits: 2.8 storage + disk build, and runtime VM launch — all as the Workspace SA, from the regional control plane."] } },
-    { id: "ing_launch", step: "run", x: 1210, y: 515, title: "VPC-SC ingress · cluster launch",
+    { id: "ing_launch", step: "run", x: 1210, y: 560, title: "VPC-SC ingress · cluster launch",
       detail: {
         what: "The SAME VPC-SC ingress rule you created in step 2.8 — it admits the Workspace SA to ingress from the Databricks (regional) control plane, so the launch can create the cluster VMs inside your perimeter.",
         note: "Cluster launch is the runtime repeat of the 2.8 build ingress — same rule, same identity (Workspace SA), same regional control-plane source." } },
@@ -441,21 +457,24 @@
     // cluster launch
     l1a:   { c: "#2a78d6", d: "M270,180 H872 V305 H901", m: "b", label: "L1 · clusters/create · TLS 443", lx: 571, ly: 180, cross: [[300, 180, "B1"]] },
     l1b:   { c: "#2a78d6", d: "M1145,305 H1200 V376 H1264", m: "b", label: "" },
-    l2:     { c: "#eb6834", d: "M1265,515 H830", m: "o", label: "L2 · GCE: launch VMs — as the Workspace SA", lx: 1047, ly: 515 },
-    l2wssa: { c: "#eb6834", dash: "6 4", d: "M1265,250 H1225 V515 H1210", m: "o", label: "" },
-    l2csa:  { c: "#eb6834", dash: "6 4", d: "M350,727 H316 V568 H585 V538", m: "o", vertical: true, label: "Workspace SA assigns Compute SA as VM identity", lx: 316, ly: 648 },
-    l2cmek: { c: "#eb6834", dash: "6 4", d: "M720,994 H740 V568 H615 V538", m: "o", vertical: true, label: "disks come up CMEK encrypted", lx: 740, ly: 781 },
+    l2:     { c: "#eb6834", d: "M1265,560 H762 V625 H720", m: "o", label: "L2 · GCE: launch VMs — as the Workspace SA", lx: 1010, ly: 553 },
+    l2wssa: { c: "#eb6834", dash: "6 4", d: "M1265,250 H1225 V560 H1210", m: "o", label: "" },
+    l2csa:  { c: "#eb6834", dash: "6 4", d: "M535,690 V666", m: "o", label: "Compute SA = VM identity", lx: 535, ly: 680 },
+    l2cmek: { c: "#eb6834", dash: "6 4", d: "M720,994 H736 V648 H720", m: "o", vertical: true, label: "disks come up CMEK encrypted", lx: 742, ly: 800 },
     tunnel:{ c: "#8a8880", dash: "4 3", d: "M450,420 V393", m: "g", label: "resolve tunnel.<region>", lx: 462, ly: 410 },
-    l3:    { c: "#eb6834", d: "M860,505 H882 V405 H901", m: "o", label: "L3 · 6666", lx: 874, ly: 470 },
+    l3:    { c: "#eb6834", d: "M654,486 H884 V405 H901", m: "o", label: "L3 · 6666", lx: 770, ly: 478 },
+    // NIC dotted links — each VM (service project) to its NIC (node subnet). Structural, markerless.
+    nic_exec_link: { c: "#8a8880", dash: "3 3", d: "M438,510 V600", label: "" },
+    nic_drv_link:  { c: "#8a8880", dash: "3 3", d: "M630,510 V600", label: "" },
     b3:    { c: "#eb6834", d: "M1145,410 H1200 V464 H1264", m: "o", label: "" },
     // notebook runtime — analyst rides the frontend wire (443); cluster<->control plane rides the SCC relay (6666)
     n1:    { c: "#2a78d6", d: "M270,180 H872 V305 H901", m: "b", label: "N1 · notebook command · TLS 443", lx: 571, ly: 180, cross: [[300, 180, "B1"]] },
     n1b:   { c: "#2a78d6", d: "M1145,305 H1200 V376 H1264", m: "b", label: "" },
     // N2 command dispatch: ngrok -> backend PSC endpoint -> DRIVER (right VM), over the SCC relay (6666)
     nb_scc_in:   { c: "#eb6834", d: "M1264,464 H1200 V420 H1147", m: "o", label: "" },
-    nb_dispatch: { c: "#eb6834", d: "M905,428 H866 V510 H830", m: "o", label: "N2 · command → driver · 6666", lx: 976, ly: 455 },
-    // N3 request: driver -> frontend PSC endpoint -> plproxy (workspace REST/API, 443)
-    nb_req:      { c: "#eb6834", dash: "6 4", d: "M830,458 H882 V320 H905", m: "o", label: "N3 · request table · REST/API", lx: 768, ly: 358 },
+    nb_dispatch: { c: "#eb6834", d: "M901,405 H630 V462", m: "o", label: "N2 · command → driver · 6666", lx: 766, ly: 398 },
+    // N3 request: driver NIC -> frontend PSC endpoint -> plproxy (workspace REST/API, 443)
+    nb_req:      { c: "#eb6834", dash: "6 4", d: "M654,478 H876 V320 H901", m: "o", label: "N3 · request table · REST/API", lx: 812, ly: 356 },
     nb_req2:     { c: "#eb6834", dash: "6 4", d: "M1145,305 H1200 V376 H1264", m: "o", label: "" },
     nb_req3:     { c: "#eb6834", dash: "6 4", d: "M1622,376 H1632 V700 H1615", m: "o", label: "" },
     // N4 vend: UC mints a down-scoped token, up to the control plane
@@ -463,14 +482,14 @@
     nb_vend_ro:  { c: "#eb6834", d: "M1280,738 H1240 V760 H1160", m: "o", vertical: true, label: "N4 · UC mints down-scoped token", lx: 1252, ly: 812 },
     nb_vend_rw:  { c: "#eb6834", d: "M1280,858 H1240 V866 H1160", m: "o", label: "" },
     // N5 context: plproxy -> frontend PSC endpoint -> driver (REST response — no 6666)
-    nb_ctx:      { c: "#eb6834", dash: "6 4", d: "M905,340 H896 V480 H830", m: "o", label: "N5 · GCS token scoped to table paths · REST", lx: 1061, ly: 489 },
-    // N6 governed reads: executors (left VM) -> down the service/mail-data gap -> GCS buckets
-    f7:    { c: "#1baf7a", d: "M548,538 V556 H764 V745 H786", m: "a", vertical: true, label: "N6 · read · RO SA", lx: 764, ly: 652, cross: [[786, 745, "ingress"]] },
-    f8:    { c: "#1baf7a", d: "M568,538 V566 H752 V846 H786", m: "a", vertical: true, label: "N6 · write · RW SA", lx: 752, ly: 808, cross: [[786, 846, "ingress"]] },
-    // N7 results: executors -> driver (processed dataset), then driver -> frontend PSC -> plproxy -> analyst
-    nb_exec_ret: { c: "#2a78d6", dash: "5 4", d: "M590,498 H610", m: "b", label: "processed dataset", lx: 600, ly: 432 },
-    nb_pd_lead:  { c: "#2a78d6", dash: "2 3", d: "M600,497 V441", label: "" },
-    ret:   { c: "#2a78d6", dash: "5 4", d: "M830,502 H886 V215 H1025 V258", m: "b", label: "N7 · results → analyst · 443", lx: 996, ly: 205 },
+    nb_ctx:      { c: "#eb6834", dash: "6 4", d: "M905,342 H894 V492 H654", m: "o", label: "N5 · GCS token scoped to table paths · REST", lx: 800, ly: 512 },
+    // N6 governed reads: executor NIC -> right across the node subnet -> down the service/mail-data gap -> GCS buckets
+    f7:    { c: "#1baf7a", d: "M462,486 H764 V745 H786", m: "a", vertical: true, label: "N6 · read · RO SA", lx: 764, ly: 640, cross: [[786, 745, "ingress"]] },
+    f8:    { c: "#1baf7a", d: "M462,492 H768 V846 H786", m: "a", vertical: true, label: "N6 · write · RW SA", lx: 768, ly: 806, cross: [[786, 846, "ingress"]] },
+    // N7 results: executor VM -> up to executor NIC -> across to driver NIC -> down to driver VM (all comms via NICs),
+    // then driver NIC -> frontend PSC -> plproxy -> analyst
+    nb_exec_ret: { c: "#2a78d6", dash: "5 4", d: "M450,600 V478 H618 V600", m: "b", label: "processed dataset", lx: 534, ly: 472 },
+    ret:   { c: "#2a78d6", dash: "5 4", d: "M654,470 H884 V215 H1025 V258", m: "b", label: "N7 · results → analyst · 443", lx: 996, ly: 205 },
     // 2.4 read-only "verify settings" sub-animation (Account API, via the creator role)
     v_net:  { c: "#8a8880", dash: "5 4", d: "M1265,610 H1216 V332 H1149", m: "g", label: "verify · network / PSC (read-only)", lx: 1120, ly: 600 },
     v_svc:  { c: "#8a8880", dash: "5 4", d: "M1265,640 H1210 V1068 H648 V1040", m: "g", label: "verify · service project (read-only)", lx: 860, ly: 1063 },
@@ -485,8 +504,8 @@
       desc: "Now authenticated, the analyst issues POST /api/2.x/clusters/create over TLS 443 — it crosses the perimeter and the frontend PSC wire to the control-plane cluster manager.",
       flows: ["l1a", "l1b"], focus: ["admin", "frontendpsc", "plproxy", "controlplane"] },
     { id: "L2", title: "L2 · Cluster manager launches VMs", team: "data",
-      desc: "Acting AS the Workspace SA (control-plane-owned launcher), the cluster manager calls the GCE API to create driver + executor VMs in the service project with CMEK-encrypted disks. It assigns the Compute SA as the VMs' identity — the VMs boot as the Compute SA, never the Workspace SA. The launch crosses the perimeter through the VPC-SC ingress rule created at 2.8 (Workspace SA, from the regional control plane).",
-      flows: ["l2", "l2wssa", "l2csa", "l2cmek"], ingress: ["ing_launch"], reveal: ["drivervm", "execvm"], focus: ["controlplane", "computesa", "drivervm", "execvm", "kms", "wssa"] },
+      desc: "Acting AS the Workspace SA (control-plane-owned launcher), the cluster manager calls the GCE API to create the driver + executor VMs in the SERVICE project (right above the Compute SA) with CMEK-encrypted disks. It assigns the Compute SA as the VMs' identity — the VMs boot as the Compute SA, never the Workspace SA. The VMs' compute lives in the service project; their networking lives in the node subnet as NICs (dotted links). The launch crosses the perimeter through the VPC-SC ingress rule created at 2.8 (Workspace SA, from the regional control plane).",
+      flows: ["l2", "l2wssa", "l2csa", "l2cmek", "nic_exec_link", "nic_drv_link"], ingress: ["ing_launch"], reveal: ["drivervm", "execvm", "nic_exec", "nic_drv"], focus: ["controlplane", "computesa", "drivervm", "execvm", "nic_exec", "nic_drv", "kms", "wssa"] },
     { id: "L3", title: "L3 · Cluster dials home (SCC relay)", team: "data",
       desc: "The VMs resolve tunnel.<region> in the private DNS zone, open TCP 6666 outbound to the backend endpoint → ngrok attachment. The cluster registers and reaches RUNNING. No inbound path to the cluster exists.",
       flows: ["tunnel", "l3", "b3"], focus: ["drivervm", "backendpsc", "ngrok"], run: "RUNNING" }
@@ -495,7 +514,7 @@
   var notebookStages = [
     { id: "N1", title: "N1 · Analyst submits a command", team: "data",
       desc: "A notebook cell / SQL query goes from the analyst's browser over the frontend PSC wire (443) to the workspace — the cluster is already RUNNING. The analyst is SSO-validated against Okta (SAML 2.0 / OIDC), shown here on the browser↔IdP side-channel — that handshake is public and never crosses the perimeter; the command itself rides the frontend wire.",
-      flows: ["l0_sso", "n1", "n1b"], reveal: ["okta", "drivervm", "execvm"], focus: ["admin", "okta", "frontendpsc", "plproxy", "controlplane"] },
+      flows: ["l0_sso", "n1", "n1b", "nic_exec_link", "nic_drv_link"], reveal: ["okta", "drivervm", "execvm", "nic_exec", "nic_drv"], focus: ["admin", "okta", "frontendpsc", "plproxy", "controlplane"] },
     { id: "N2", title: "N2 · Control plane dispatches the command to the driver", team: "data",
       desc: "The control plane can't connect IN to the cluster (no public IP, no inbound). It places the command on the SCC relay (TCP 6666) — out through ngrok to the backend PSC endpoint — and the driver picks it up over the outbound connection it opened at launch. Nothing connects inward.",
       flows: ["nb_scc_in", "nb_dispatch"], focus: ["controlplane", "backendpsc", "ngrok", "drivervm"] },
@@ -513,7 +532,7 @@
       flows: ["f7", "f8"], focus: ["execvm", "datalake", "analytics"], pulse: ["drivervm", "execvm"] },
     { id: "N7", title: "N7 · Results return to the analyst", team: "data",
       desc: "The executors send the processed dataset to the driver; the driver returns results over the frontend PSC wire → plproxy → analyst (443). The control plane sees metadata + query text (CMEK-encrypted) — never the data itself. The data never leaves the perimeter.",
-      flows: ["nb_exec_ret", "nb_pd_lead", "ret"], focus: ["admin", "drivervm", "execvm", "frontendpsc", "plproxy"] }
+      flows: ["nb_exec_ret", "ret"], focus: ["admin", "drivervm", "execvm", "frontendpsc", "plproxy"] }
   ];
 
   /* ================= rendering ================= */
@@ -575,8 +594,16 @@
       txt(g, n.x + n.w / 2, n.y + n.h / 2 + 4, n.title, { "font-size": fs(10.5), "font-weight": 700, "text-anchor": "middle", fill: "#b3421f" });
       elByNode[n.id] = g; return;
     }
+    if (n.img) {   // image node (e.g. a NIC icon) — just the picture + an optional caption above it
+      var im = E("image", { class: "nicimg", x: n.x, y: n.y, width: n.w, height: n.h, preserveAspectRatio: "xMidYMid meet" }, g);
+      im.setAttribute("href", n.img);
+      im.setAttributeNS("http://www.w3.org/1999/xlink", "href", n.img);   // legacy fallback
+      if (n.caption) txt(g, n.x + n.w / 2, n.y - 5, n.caption, { "font-size": fs(9.5), "font-weight": 600, "text-anchor": "middle", fill: "#52514e" });
+      if (n.detail) { g.classList.add("clickable"); g.addEventListener("click", function () { selectNode(n.id); }); }
+      elByNode[n.id] = g; return;
+    }
     E("rect", { class: "box", x: n.x, y: n.y, width: n.w, height: n.h, rx: 8,
-      fill: "#ffffff", stroke: n.optional ? "#b98b00" : "#e1e0d9",
+      fill: idFill(n), stroke: n.optional ? "#b98b00" : "#e1e0d9",
       "stroke-width": n.optional ? 1.5 : 1,
       "stroke-dasharray": n.optional ? "6 4" : "0" }, g);
     if (n.optional) {
@@ -937,9 +964,9 @@
   function renderLegend() {
     var L = document.getElementById("legend");
     var sets = {
-      deploy: [["line", "#d03b3b", "VPC-SC boundary", "8 5"], ["line", "#eb6834", "grant edge", "5 4"], ["dot", "#0b7a54", "created / changed this step"], ["dot", "#e0b25a", "pending"], ["ring", "#d03b3b", "VPC-SC ingress · click"]],
-      launch: [["line", "#2a78d6", "user access"], ["line", "#eb6834", "control plane / launch"], ["line", "#8a8880", "DNS", "4 3"], ["dot", "#d03b3b", "boundary crossing"], ["ring", "#d03b3b", "VPC-SC ingress · click"]],
-      notebook: [["line", "#2a78d6", "user access"], ["line", "#eb6834", "control plane"], ["line", "#1baf7a", "data plane (governed read)"], ["dot", "#d03b3b", "VPC-SC crossing"], ["ring", "#d03b3b", "VPC-SC ingress · click"]]
+      deploy: [["line", "#d03b3b", "VPC-SC boundary", "8 5"], ["line", "#eb6834", "grant edge", "5 4"], ["dot", "#0b7a54", "created / changed this step"], ["dot", "#e0b25a", "pending"], ["ring", "#d03b3b", "VPC-SC ingress · click"], ["fill", ID_DBX, "Databricks identity"], ["fill", ID_YAHOO, "Yahoo identity"]],
+      launch: [["line", "#2a78d6", "user access"], ["line", "#eb6834", "control plane / launch"], ["line", "#8a8880", "DNS", "4 3"], ["dot", "#d03b3b", "boundary crossing"], ["ring", "#d03b3b", "VPC-SC ingress · click"], ["fill", ID_DBX, "Databricks identity"], ["fill", ID_YAHOO, "Yahoo identity"]],
+      notebook: [["line", "#2a78d6", "user access"], ["line", "#eb6834", "control plane"], ["line", "#1baf7a", "data plane (governed read)"], ["dot", "#d03b3b", "VPC-SC crossing"], ["ring", "#d03b3b", "VPC-SC ingress · click"], ["fill", ID_DBX, "Databricks identity"], ["fill", ID_YAHOO, "Yahoo identity"]]
     };
     L.innerHTML = "";
     sets[tab].forEach(function (it) {
@@ -950,6 +977,8 @@
         s.appendChild(sw);
       } else if (it[0] === "ring") {
         var rg = document.createElement("span"); rg.className = "lgring"; rg.style.borderColor = it[1]; s.appendChild(rg);
+      } else if (it[0] === "fill") {
+        var fb = document.createElement("span"); fb.className = "lgfill"; fb.style.background = it[1]; s.appendChild(fb);
       } else {
         var d = document.createElement("span"); d.className = "dot"; d.style.background = it[1]; s.appendChild(d);
       }
