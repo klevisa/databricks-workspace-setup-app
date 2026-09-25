@@ -42,6 +42,15 @@
         what: "The Databricks-managed regional services for this workspace — the Cluster Manager (launches compute as the Workspace SA), the Job Scheduler, Unity Catalog, and the SCC relay. It is reached only through its two PSC attachments: plproxy (frontend UI / API / REST) and ngrok (backend SCC relay). No public path.",
         conn: ["Reached only via its two PSC attachments — no public ingress", "Control-plane data (notebooks, results, secrets) is CMEK-encrypted (2.7)"] } },
     { id: "internet",  step: "0", x: 1240, y: 972, w: 400, h: 110, label: "PUBLIC INTERNET", cls: "frame" },
+    // Serverless compute plane — shown ONLY in the serverless tab (tabOnly). It sits BELOW and
+    // OUTSIDE Yahoo's perimeter because serverless runs in Databricks-owned GCP projects, not the
+    // Shared VPC. This is the whole teaching point: compute leaves your VPC entirely.
+    { id: "slframe", step: "run", tabOnly: "serverless", x: 330, y: 1120, w: 850, h: 150, label: "DATABRICKS SERVERLESS COMPUTE PLANE", label2: "— runs in Databricks-owned GCP projects · OUTSIDE your VPC-SC perimeter", cls: "frame",
+      detail: {
+        what: "Where serverless workloads actually run — Databricks-owned, multi-tenant GCP projects, NOT your Shared VPC. Because it lives outside your perimeter, none of your classic network controls (node subnet, firewall rules, PSC backend relay) govern it. Two account-level controls do: the VPC-SC ingress source-pin (what lets it reach your data) and the serverless egress network policy (what stops it reaching the internet).",
+        owner: "data",
+        conn: ["Compute is ephemeral + isolated per workload — you provision no VMs and manage no subnet", "Reaches your data ONLY as the vended UC storage-credential SA, through the VPC-SC ingress", "No internet egress (serverless egress network policy, ENFORCED)"],
+        repo: "serverless-setup/" } },
     { id: "uc",        step: "3", x: 1265, y: 688, w: 350, h: 266, label: "UNITY CATALOG — METASTORE", cls: "subframe",
       detail: {
         what: "The account-level Unity Catalog metastore. In the data-access phase it gains two storage credentials (each generating its own Databricks GCP SA) and two external locations that give the workspace governed access to GCS.",
@@ -304,7 +313,29 @@
       lines: ["PyPI · Maven · npm"],
       detail: {
         what: "Public package registries for library installs, reachable outbound via Cloud NAT. Optional if you mirror packages internally.",
-        conn: ["Outbound only, via Cloud Router + NAT"] } }
+        conn: ["Outbound only, via Cloud Router + NAT"] } },
+
+    // ---- Serverless plane (tab 4 only; step "run", revealed per stage) ----
+    // Compute is NOT an IAM identity, so it stays white (like the driver/executor VMs) — the
+    // serverless FRAME conveys the Databricks-owned / outside-the-perimeter ownership.
+    { id: "slcompute", step: "run", x: 360, y: 1158, w: 330, h: 96, title: "Serverless compute",
+      lines: ["No cluster to launch in your VPC —", "no driver/executor VMs, no node subnet"],
+      detail: {
+        what: "The compute for this query, provisioned instantly in Databricks-owned projects. There is no cluster to launch in your VPC, no driver/executor VMs in your service project, and no node-subnet networking to manage. It reads your data governed exactly like classic compute — as the vended UC storage-credential SA, through Unity Catalog and the VPC-SC ingress.",
+        owner: "data",
+        conn: ["Runs in the Databricks serverless-compute project for your region — outside your perimeter", "Reads GCS as the vended UC storage-credential SA — the SAME identity classic compute uses (never its own)", "Ephemeral + isolated per workload; you provision and patch nothing", "Control-plane traffic (UC credential requests) is Databricks-internal — it never enters your VPC"],
+        repo: "serverless-setup/" } },
+    { id: "slegress", step: "run", x: 726, y: 1158, w: 434, h: 96, title: "Serverless egress network policy",
+      lines: ["RESTRICTED_ACCESS · ENFORCED", "empty internet allowlist → NO internet egress"],
+      detail: {
+        what: "An account-level network policy attached to the workspace that locks down what the serverless plane may reach. Set to RESTRICTED_ACCESS + ENFORCED with an empty internet allowlist, so serverless compute cannot reach the public internet — nothing can be exfiltrated out.",
+        owner: "network",
+        extra: [
+          { label: "Reaching your data is NOT internet egress", body: "Reads of your GCS buckets are <strong>private storage access</strong>, admitted by the VPC-SC ingress — not internet. But note: under <code>ENFORCED</code>, if serverless needs UC data on GCS you must <strong>allowlist those buckets as storage destinations</strong> on the policy, or the read is blocked too." },
+          { label: "De-risk the rollout with DRY_RUN", body: "Set <code>egress_enforcement_mode = DRY_RUN</code> first to <em>log</em> (not block) violations, learn exactly what serverless needs, complete the storage allowlist, then switch back to <code>ENFORCED</code> — keeping the internet allowlist empty." },
+          { label: "Firewall allowlist — an ONGOING job, not one-time", body: "Databricks publishes the serverless-compute <strong>outbound IPs</strong>; these must be allowlisted on your firewall. Unlike the source-pin project numbers (stable), <strong>these IP ranges rotate</strong> (a preview feed). A one-time manual entry will <strong>silently break</strong> — you must automate a periodic fetch-diff-update of <code>ip-ranges.json</code>. Plan for this as a standing operational responsibility." } ],
+        conn: ["RESTRICTED_ACCESS + ENFORCED + empty allowlist = no internet egress", "GCS reads = private storage access (VPC-SC ingress), not internet"],
+        repo: "serverless-setup/network-policy.tf" } }
   ];
 
   /* ---------------- persistent deployment "grant" edges ---------------- */
@@ -370,7 +401,18 @@
           { label: "Source · serverless (only if used)", body: "the <strong>regional serverless-compute project</strong> — serverless reads/writes as the SAME vended SA from Databricks-owned projects." },
           { label: "Into · all methods", body: "<code>storage.googleapis.com</code> · read + write, on the analytics bucket's project." },
           { label: "Not in this rule", body: "classic in-VPC compute originates inside the perimeter — intra-perimeter, no ingress needed." } ],
-        repo: "data-access/catalog-readwrite.tf" } }
+        repo: "data-access/catalog-readwrite.tf" } },
+    // Serverless data read crosses the perimeter FLOOR (up the service/mail-data channel into the
+    // buckets). Same VPC-SC ingress RULE as the classic data reads — the only change is the source-pin.
+    { id: "ing_sl", step: "run", x: 763, y: 1085, title: "VPC-SC ingress · serverless data read",
+      detail: {
+        what: "The serverless read crosses your perimeter here. It is admitted by the SAME VPC-SC ingress rule as the classic data reads (data-access phase) — same identity, same buckets, same methods. Serverless needs NO new rule; the ONLY change is one entry in the source-pin.",
+        extra: [
+          { label: "Identity — unchanged", body: "the SAME <strong>vended UC storage-credential SA</strong> (RO <code>objectViewer</code> / RW <code>objectAdmin</code>) that classic compute uses. Serverless does not read as its own identity." },
+          { label: "Source · add the serverless-compute project", body: "the one change for serverless: extend the ingress rule's source-pin (<code>databricks_source_projects</code>) to include the <strong>regional serverless-compute project numbers</strong>. Serverless runs in those Databricks-owned projects, so its reads originate there — this entry is what admits them. The project numbers are <strong>stable</strong>." },
+          { label: "Why classic needed no such source", body: "classic in-VPC compute reads originate INSIDE your perimeter (node subnet → bucket) — intra-perimeter, no ingress at all. Serverless reads originate OUTSIDE (Databricks projects), so the perimeter must admit them." } ],
+        conn: ["Same rule as ing_ro / ing_rw — VPC-SC evaluates identity AND source (AND)", "Not internet egress: this is private storage access into your buckets"],
+        repo: "data-access/ (source-pin) · serverless-setup/README.md" } }
   ];
 
   // PSC "wires": consumer endpoint → producer service attachment. Dashed/pending when
@@ -493,7 +535,20 @@
     // 2.4 read-only "verify settings" sub-animation (Account API, via the creator role)
     v_net:  { c: "#8a8880", dash: "5 4", d: "M1265,610 H1216 V332 H1149", m: "g", label: "verify · network / PSC (read-only)", lx: 1120, ly: 600 },
     v_svc:  { c: "#8a8880", dash: "5 4", d: "M1265,640 H1210 V1068 H648 V1040", m: "g", label: "verify · service project (read-only)", lx: 860, ly: 1063 },
-    v_cmek: { c: "#8a8880", dash: "5 4", d: "M1265,655 H1200 V1078 H318 V994 H350", m: "g", label: "verify · CMEK (read-only)", lx: 430, ly: 1088 }
+    v_cmek: { c: "#8a8880", dash: "5 4", d: "M1265,655 H1200 V1078 H318 V994 H350", m: "g", label: "verify · CMEK (read-only)", lx: 430, ly: 1088 },
+
+    // ===== serverless tab (tab 4) =====
+    // S1 · analyst submits a serverless query — frontend PSC wire, 443 (same private front door).
+    sl_q:  { c: "#2a78d6", d: "M270,180 H872 V305 H901", m: "b", label: "S1 · serverless query · TLS 443", lx: 571, ly: 180, cross: [[300, 180, "B1"]] },
+    // S2/S3 · Databricks-INTERNAL control path between the control plane and the serverless plane —
+    // routed down the OUTER gutter (right of the perimeter edge): it never enters your VPC.
+    sl_ctrl: { c: "#eb6834", dash: "6 4", d: "M1250,470 H1216 V1206 H692", m: "o", vertical: true, label: "control plane ↔ serverless · Databricks-internal", lx: 1216, ly: 840 },
+    // S4 · governed reads — serverless reads GCS AS the vended UC SA, up the service/mail-data channel,
+    // crossing the perimeter floor (ing_sl). Same green data-plane language as the notebook tab.
+    sl_read_ro: { c: "#1baf7a", d: "M690,1206 H758 V745 H786", m: "a", vertical: true, label: "S4 · read · RO SA", lx: 758, ly: 940, cross: [[758, 1085, "ingress"]] },
+    sl_read_rw: { c: "#2a78d6", d: "M690,1224 H768 V846 H786", m: "b", vertical: true, label: "S4 · write · RW SA", lx: 768, ly: 1000, cross: [[768, 1085, "ingress"]] },
+    // S5 · results return to the analyst over the frontend PSC wire (443).
+    sl_ret: { c: "#2a78d6", dash: "5 4", d: "M905,300 H886 V205 H272", m: "b", label: "S5 · results → analyst · 443", lx: 560, ly: 200 }
   };
 
   var launchStages = [
@@ -533,6 +588,24 @@
     { id: "N7", title: "N7 · Results return to the analyst", team: "data",
       desc: "The executors send the processed dataset to the driver; the driver returns results over the frontend PSC wire → plproxy → analyst (443). The control plane sees metadata + query text (CMEK-encrypted) — never the data itself. The data never leaves the perimeter.",
       flows: ["nb_exec_ret", "ret"], focus: ["admin", "drivervm", "execvm", "frontendpsc", "plproxy"] }
+  ];
+
+  var serverlessStages = [
+    { id: "S1", title: "S1 · Analyst runs a serverless query", team: "data",
+      desc: "The analyst is SSO-validated against Okta (as in the classic tabs) and submits a query over the frontend PSC wire (TLS 443) — the same private front door. What's different starts now: there is no cluster to start. With serverless, the analyst just runs the query.",
+      flows: ["l0_sso", "sl_q", "l1b"], reveal: ["okta"], focus: ["admin", "okta", "frontendpsc", "plproxy", "controlplane"] },
+    { id: "S2", title: "S2 · No cluster in your VPC — compute runs in Databricks projects", team: "data",
+      desc: "Contrast this with the Cluster-launch tab: there, Databricks launched driver + executor VMs INSIDE your service project, on your node subnet, governed by your firewall. Serverless launches nothing in your VPC. The compute is provisioned instantly in Databricks-OWNED GCP projects, OUTSIDE your perimeter (the frame below). So your classic network controls (subnet, firewall, PSC backend) don't apply — instead a serverless egress network policy locks it down: RESTRICTED_ACCESS + ENFORCED with an empty internet allowlist means the serverless plane has NO internet egress. The control plane dispatches the query to it over a Databricks-internal path that never enters your VPC.",
+      flows: ["sl_ctrl"], reveal: ["okta", "slcompute", "slegress"], focus: ["controlplane", "slframe", "slcompute", "slegress"] },
+    { id: "S3", title: "S3 · Same governance — UC vends to the SAME vended SA", team: "data",
+      desc: "Data governance does not change. The serverless plane asks Unity Catalog for the table; UC checks the querying principal's grant and mints a short-lived, path-scoped GCS token from the SAME vended storage-credential SA that classic compute uses (read-only or read-write). This credential exchange rides the same Databricks-internal path (shown from S2) — control plane ↔ serverless — and never enters your VPC.",
+      flows: [], reveal: ["okta", "slcompute", "slegress"], focus: ["uc", "sc_ro", "sc_rw", "slcompute"] },
+    { id: "S4", title: "S4 · Governed read crosses the SAME VPC-SC ingress", team: "data",
+      desc: "The serverless plane reads your GCS data AS the vended UC SA — and because it runs OUTSIDE your perimeter, that read must cross your VPC-SC boundary. It is admitted by the SAME ingress rule as the classic data reads; the ONLY change for serverless is one entry in the source-pin — adding Databricks' regional serverless-compute project numbers (stable). Classic in-VPC reads needed no ingress at all (they originate inside the perimeter); serverless reads originate outside, so the perimeter must admit them. This is private storage access, not internet egress — click the marker for the source-pin detail.",
+      flows: ["sl_read_ro", "sl_read_rw"], ingress: ["ing_sl"], reveal: ["okta", "slcompute", "slegress"], focus: ["slcompute", "datalake", "analytics"], pulse: ["slcompute"] },
+    { id: "S5", title: "S5 · Results return — what contains the data", team: "data",
+      desc: "Results return to the analyst over the frontend PSC wire (443). One honest point for Yahoo: with serverless, the scan ran in Databricks-owned compute OUTSIDE your perimeter, so your data was read there — unlike classic, where compute sits inside your VPC. What contains it: Unity Catalog governance (only granted principals), the NARROW VPC-SC ingress (only the one vended SA, only these buckets, only these methods, only from the pinned serverless project), and the serverless egress policy (no internet — nothing can be exfiltrated). Ephemeral, isolated compute with a governed read-in and a locked-down read-out.",
+      flows: ["sl_ret"], reveal: ["okta", "slcompute", "slegress"], focus: ["admin", "frontendpsc", "plproxy", "controlplane", "slcompute"] }
   ];
 
   /* ================= rendering ================= */
@@ -698,7 +771,7 @@
   var layC, layE, layW, layN, layF, layFlab, layI;
   function renderAll() {
     buildDefs();
-    E("rect", { x: 0, y: 0, width: 1680, height: 1160, fill: "#fcfcfb" }, svg);
+    E("rect", { x: 0, y: 0, width: 1680, height: 1300, fill: "#fcfcfb" }, svg);
     layC = E("g", { id: "layC" }, svg);
     layE = E("g", { id: "layE" }, svg);
     layW = E("g", { id: "layW" }, svg);
@@ -809,6 +882,8 @@
     applyDeployStates(max);
     // deploy-only annotations (e.g. the firewall note) would collide with runtime VMs
     nodes.forEach(function (n) { if (n.deployOnly && elByNode[n.id]) toggle(elByNode[n.id], false); });
+    // tab-scoped containers (e.g. the serverless plane) appear only in their own runtime tab
+    containers.forEach(function (c) { if (c.tabOnly) toggle(elByContainer[c.id], c.tabOnly === tab); });
     // setup-time grant edges are deployment-only; hide them under the runtime flows
     edges.forEach(function (e) { toggle(elByEdge[e.id], false); });
   }
@@ -859,7 +934,7 @@
   function panelStage(s) {
     var p = document.getElementById("panelBody");
     var team = s.team ? TEAM[s.team] : null;
-    var h = '<div class="step-id">' + s.id + '</div><h2>' + s.title.replace(/^[LN]\d · /, "") + '</h2>';
+    var h = '<div class="step-id">' + s.id + '</div><h2>' + s.title.replace(/^[LNS]\d · /, "") + '</h2>';
     if (team) h += '<span class="chip" style="background:' + team.color + '">' + team.name + '</span>';
     h += '<p>' + s.desc + '</p>';
     p.innerHTML = h;
@@ -929,7 +1004,7 @@
   }
 
   /* ================= controls ================= */
-  function currentList() { return tab === "deploy" ? steps : (tab === "launch" ? launchStages : notebookStages); }
+  function currentList() { return tab === "deploy" ? steps : (tab === "launch" ? launchStages : (tab === "notebook" ? notebookStages : serverlessStages)); }
   function goto(i) {
     if (tab === "deploy") setDeploy(i);
     else setStage(currentList(), i);
@@ -956,8 +1031,12 @@
     tab = t; stopPlay(); idx = 0;
     document.querySelectorAll(".tab").forEach(function (b) { b.setAttribute("aria-selected", b.dataset.tab === t); });
     document.getElementById("railTitle").textContent =
-      t === "deploy" ? "Deployment steps" : (t === "launch" ? "Cluster launch" : "Notebook command");
+      t === "deploy" ? "Deployment steps" : (t === "launch" ? "Cluster launch" : (t === "notebook" ? "Notebook command" : "Serverless query"));
     renderLegend();
+    // the serverless tab adds a plane BELOW the perimeter, so it needs a taller view; the other
+    // tabs keep the original height (no dead band). baseVB drives zoom/fit, so update it + refit.
+    baseVB.h = (t === "serverless") ? 1205 : 966;
+    fitVB();
     if (t === "deploy") setDeploy(0); else setStage(currentList(), 0);
   }
 
@@ -966,7 +1045,8 @@
     var sets = {
       deploy: [["line", "#d03b3b", "VPC-SC boundary", "8 5"], ["line", "#eb6834", "grant edge", "5 4"], ["dot", "#0b7a54", "created / changed this step"], ["dot", "#e0b25a", "pending"], ["ring", "#d03b3b", "VPC-SC ingress · click"], ["fill", ID_DBX, "Databricks identity"], ["fill", ID_YAHOO, "Yahoo identity"]],
       launch: [["line", "#2a78d6", "user access"], ["line", "#eb6834", "control plane / launch"], ["line", "#8a8880", "DNS", "4 3"], ["dot", "#d03b3b", "boundary crossing"], ["ring", "#d03b3b", "VPC-SC ingress · click"], ["fill", ID_DBX, "Databricks identity"], ["fill", ID_YAHOO, "Yahoo identity"]],
-      notebook: [["line", "#2a78d6", "user access"], ["line", "#eb6834", "control plane"], ["line", "#1baf7a", "data plane (governed read)"], ["dot", "#d03b3b", "VPC-SC crossing"], ["ring", "#d03b3b", "VPC-SC ingress · click"], ["fill", ID_DBX, "Databricks identity"], ["fill", ID_YAHOO, "Yahoo identity"]]
+      notebook: [["line", "#2a78d6", "user access"], ["line", "#eb6834", "control plane"], ["line", "#1baf7a", "data plane (governed read)"], ["dot", "#d03b3b", "VPC-SC crossing"], ["ring", "#d03b3b", "VPC-SC ingress · click"], ["fill", ID_DBX, "Databricks identity"], ["fill", ID_YAHOO, "Yahoo identity"]],
+      serverless: [["line", "#2a78d6", "user access"], ["line", "#eb6834", "control plane · Databricks-internal", "6 4"], ["line", "#1baf7a", "data plane (governed read)"], ["ring", "#d03b3b", "VPC-SC ingress · click"], ["fill", ID_DBX, "Databricks identity"], ["fill", ID_YAHOO, "Yahoo identity"]]
     };
     L.innerHTML = "";
     sets[tab].forEach(function (it) {
